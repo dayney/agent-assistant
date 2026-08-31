@@ -6,6 +6,12 @@ import type {
     GlobalMcpItem,
     GlobalRuleItem,
     ProjectSummary,
+    ProjectRuleImport,
+    RuleDocument,
+    RuleProposal,
+    RuleRequest,
+    RuleSyncResult,
+    RuleWorkspace,
     WorkspaceSnapshot,
 } from './model';
 
@@ -132,5 +138,42 @@ export class DemoClient {
 
     async previewApply(): Promise<ApplyPreview> {
         return createDemoApplyPreview();
+    }
+
+    async getRules(request: RuleRequest): Promise<RuleWorkspace> {
+        const document: RuleDocument = {
+            scope: request.scope,
+            projectPath: request.projectPath,
+            canonicalPath: request.scope === 'global' ? '~/.agentsync/memory/AGENTS.md' : `${request.projectPath}/.agentsync/memory/AGENTS.md`,
+            body: '# Agent Governance\n\nPrefer the existing project stack and patterns.\n',
+            fragments: [],
+            agents: request.agents ?? ['codex', 'cursor', 'gemini'],
+        };
+        return {
+            document,
+            availableAgents: agents.map((agent) => agent.id),
+            blocked: false,
+            targets: document.agents.map((agent) => ({ agent, path: `~/.${agent}/RULES.md`, supported: true, status: 'pending', blocked: false, willWrite: true })),
+        };
+    }
+
+    async saveRule(request: RuleRequest & { body: string }): Promise<RuleDocument> {
+        return { ...(await this.getRules(request)).document, body: request.body };
+    }
+
+    async syncRules(request: RuleRequest & { resolution?: 'backup-overwrite' }): Promise<RuleSyncResult> {
+        return { preview: await this.getRules(request), applied: true, backups: [] };
+    }
+
+    async importNativeRule(request: RuleRequest & { agent: string }): Promise<RuleDocument> {
+        return { ...(await this.getRules(request)).document, body: `# Imported from ${request.agent}\n` };
+    }
+
+    async importProject(path: string): Promise<ProjectRuleImport> {
+        return { path, needsAnalysis: false, sources: [{ path: `${path}/AGENTS.md`, agents: ['codex', 'cursor'], body: '# Project Rule\n' }] };
+    }
+
+    async analyzeProjectRules(): Promise<RuleProposal> {
+        return { body: '# Project Rule\n', notes: ['原生规则内容一致。'], analyzer: 'deterministic', requiresAI: false };
     }
 }

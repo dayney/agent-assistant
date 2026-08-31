@@ -31,6 +31,20 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// WriteConfig writes agentsync.toml from a templated Config. It is used by
+// canonical authoring surfaces such as project initialization; native Agent
+// destinations must continue to flow through render.Writer.
+func WriteConfig(home string, cfg Config) error {
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		return fmt.Errorf("mkdir canonical home: %w", err)
+	}
+	body, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal agentsync.toml: %w", err)
+	}
+	return iox.AtomicWrite(filepath.Join(home, "agentsync.toml"), body, 0o644)
+}
+
 // ValidateComponentID rejects a component id/name/event that would not produce
 // a clean file path under its source subdirectory. This is the single
 // dest->source write boundary, reached by `import` and `reconcile` write-back

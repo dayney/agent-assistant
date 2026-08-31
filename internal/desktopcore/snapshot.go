@@ -23,6 +23,7 @@ import (
 	"github.com/spxrogers/agentsync/internal/paths"
 	"github.com/spxrogers/agentsync/internal/project"
 	"github.com/spxrogers/agentsync/internal/source"
+	"github.com/spxrogers/agentsync/internal/state"
 )
 
 type ScopeKind string
@@ -163,6 +164,11 @@ func ReadSnapshot(opts Options) (WorkspaceSnapshot, error) {
 	if err != nil {
 		return WorkspaceSnapshot{}, err
 	}
+	registry, err := state.LoadProjectRegistry(filepath.Join(opts.Home, ".state", "agent-assistant", "projects.json"))
+	if err != nil {
+		return WorkspaceSnapshot{}, fmt.Errorf("load imported projects: %w", err)
+	}
+	projects = mergeProjectRoots(projects, registry.Projects)
 
 	snapshot := WorkspaceSnapshot{
 		SchemaVersion: 1,
@@ -240,6 +246,30 @@ func ReadSnapshot(opts Options) (WorkspaceSnapshot, error) {
 		}
 	}
 	return snapshot, nil
+}
+
+func mergeProjectRoots(discovered []string, registered []state.RegisteredProject) []string {
+	seen := make(map[string]bool, len(discovered)+len(registered))
+	out := make([]string, 0, len(discovered)+len(registered))
+	for _, root := range discovered {
+		clean := filepath.Clean(root)
+		if !seen[clean] {
+			seen[clean] = true
+			out = append(out, clean)
+		}
+	}
+	for _, item := range registered {
+		clean := filepath.Clean(item.Path)
+		if seen[clean] {
+			continue
+		}
+		if info, err := os.Stat(clean); err == nil && info.IsDir() {
+			seen[clean] = true
+			out = append(out, clean)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func discoverProjects(root string) ([]string, error) {

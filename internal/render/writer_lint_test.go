@@ -128,6 +128,7 @@ func TestNoDirectDestructiveOSCallsOutsideAllowedFiles(t *testing.T) {
 		"internal/cli/mcp.go":                    true, // removes mcp/<id>.toml (canonical source)
 		"internal/cli/doctor.go":                 true, // ~/.agentsync writability probe
 		"internal/cli/reconcile.go":              true, // canonical-source write-back + the backed-up native orphan removal
+		"internal/desktopcore/rule_analyzer.go":  true, // private temp schema + cleanup for the local Codex analysis process
 	}
 	forbidden := []string{"os.Remove", "os.RemoveAll", "os.WriteFile", "os.Create", "os.OpenFile", "os.Rename", "os.Truncate"}
 

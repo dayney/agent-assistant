@@ -26,12 +26,42 @@ fn core_health() -> CoreHealth {
 
 #[tauri::command]
 fn get_workspace_snapshot() -> Result<serde_json::Value, String> {
-    invoke_core("snapshot")
+    invoke_core("snapshot", serde_json::Value::Null)
 }
 
 #[tauri::command]
 fn preview_apply() -> Result<serde_json::Value, String> {
-    invoke_core("preview")
+    invoke_core("preview", serde_json::Value::Null)
+}
+
+#[tauri::command]
+fn rules_get(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    invoke_core("rules_get", request)
+}
+
+#[tauri::command]
+fn rules_save(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    invoke_core("rules_save", request)
+}
+
+#[tauri::command]
+fn rules_sync(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    invoke_core("rules_sync", request)
+}
+
+#[tauri::command]
+fn rules_import_native(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    invoke_core("rules_import_native", request)
+}
+
+#[tauri::command]
+fn project_import(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    invoke_core("project_import", request)
+}
+
+#[tauri::command]
+fn project_analyze_rules(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    invoke_core("project_analyze_rules", request)
 }
 
 fn core_binary() -> Option<std::path::PathBuf> {
@@ -88,7 +118,7 @@ fn which_core_binary() -> Option<std::path::PathBuf> {
     None
 }
 
-fn invoke_core(method: &str) -> Result<serde_json::Value, String> {
+fn invoke_core(method: &str, payload: serde_json::Value) -> Result<serde_json::Value, String> {
     let binary = core_binary().ok_or_else(|| {
         "core_unavailable: agent-assistant-core was not found; set AGENT_ASSISTANT_CORE_BIN or place the sidecar beside the app".to_string()
     })?;
@@ -98,7 +128,11 @@ fn invoke_core(method: &str) -> Result<serde_json::Value, String> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("core_spawn_failed: {error}"))?;
-    let request = serde_json::json!({"method": method});
+    let request = if payload.is_null() {
+        serde_json::json!({"method": method})
+    } else {
+        serde_json::json!({"method": method, "payload": payload})
+    };
     child
         .stdin
         .as_mut()
@@ -128,7 +162,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             core_health,
             get_workspace_snapshot,
-            preview_apply
+            preview_apply,
+            rules_get,
+            rules_save,
+            rules_sync,
+            rules_import_native,
+            project_import,
+            project_analyze_rules
         ])
         .run(tauri::generate_context!())
         .expect("error while running agent-assistant");

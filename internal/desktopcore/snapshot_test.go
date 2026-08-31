@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/spxrogers/agentsync/internal/state"
 	"github.com/spxrogers/agentsync/internal/testenv"
 )
 
@@ -34,6 +36,30 @@ func TestReadSnapshotDiscoversProjectCanonicalTrees(t *testing.T) {
 	}
 	if snapshot.Agents[0].Name != "Codex" {
 		t.Fatalf("agent = %q, want Codex", snapshot.Agents[0].Name)
+	}
+}
+
+func TestReadSnapshotIncludesManuallyImportedProjectWithoutCanonicalTree(t *testing.T) {
+	testenv.RequireContainer(t)
+	root := t.TempDir()
+	global := filepath.Join(root, "global")
+	projectRoot := filepath.Join(root, "outside-discovery", "plain-project")
+	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	registryPath := filepath.Join(global, ".state", "agent-assistant", "projects.json")
+	if err := state.SaveProjectRegistry(registryPath, &state.ProjectRegistry{
+		Projects: []state.RegisteredProject{{Path: projectRoot, AddedAt: time.Now().UTC()}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := ReadSnapshot(Options{Home: global, ProjectsRoot: filepath.Join(root, "empty"), NativeRoot: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Projects) != 1 || snapshot.Projects[0].Path != projectRoot || snapshot.Projects[0].SyncState != "not-configured" {
+		t.Fatalf("manual project was not represented faithfully: %+v", snapshot.Projects)
 	}
 }
 

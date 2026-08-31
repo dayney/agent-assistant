@@ -46,6 +46,12 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 
 ### Added
 
+- **Desktop Rule management.** The macOS client now edits global and project
+  mother Rules, previews all production Agent adapters, blocks on native drift
+  with a Diff, and requires either native-to-mother import or backup-before-
+  overwrite. Projects can be registered locally without project writes; their
+  native Rules can produce a reviewed deterministic or local-Codex proposal.
+
 - **Read-only macOS desktop foundation.** The Tauri 2 shell connects to a local
   Go JSON-line sidecar, reads canonical project trees plus whitelisted native
   Agent metadata, and never returns secret values.

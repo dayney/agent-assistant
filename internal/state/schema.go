@@ -47,6 +47,18 @@ type PluginEntry struct {
 	Enabled     bool   `json:"enabled"`
 }
 
+// ProjectRegistry is agent-assistant's local list of manually imported project
+// roots. It is machine state under ~/.agentsync/.state, never project source.
+type ProjectRegistry struct {
+	SchemaVersion int                 `json:"schema_version"`
+	Projects      []RegisteredProject `json:"projects"`
+}
+
+type RegisteredProject struct {
+	Path    string    `json:"path"`
+	AddedAt time.Time `json:"added_at"`
+}
+
 // New returns a fresh empty Targets at SchemaVersion.
 func New() *Targets {
 	return &Targets{

@@ -1321,11 +1321,12 @@ adapter requires an explicit stop rather than an invented fallback.
 ## 14. Desktop client and local Core sidecar
 
 The macOS-first desktop client lives under `desktop/` and uses Tauri 2 with a
-React/TypeScript UI. Its Rust commands do not parse TOML, JSON, or secrets. They
-start the `agent-assistant-core` Go sidecar and exchange one JSON request/response
-per command over stdin/stdout. The sidecar reuses `source.Load` for canonical
-`~/.agentsync/` and project `.agentsync/` trees, and calls the existing Codex,
-Cursor, and Gemini ingest paths for a read-only native inventory.
+React/TypeScript UI. Its Rust commands do not parse TOML, Agent files, or
+secrets. They start the `agent-assistant-core` Go sidecar and exchange one JSON
+request/response per command over stdin/stdout. The sidecar reuses
+`source.Load`, the shared production adapter registry, `render`, `drift`, and
+`state`; the desktop is an authoring surface over existing agentsync contracts,
+not a second configuration engine.
 
 Native inventory is evidence, not policy. It is labelled `agent` provenance in
 the UI and is never written back automatically. The sidecar returns MCP names,
@@ -1339,3 +1340,30 @@ The first desktop slice discovers project trees one level below
 `$HOME/git/work` (or `AGENT_ASSISTANT_PROJECTS_ROOT`) and reports “已发现” until
 the apply-state/drift projection is connected. It therefore does not claim that
 an observed native file has already been rendered or synchronized.
+
+### Rule authoring and synchronization
+
+Global Rule source is `~/.agentsync/memory/`; project Rule source is
+`<project>/.agentsync/memory/`. A memory-only model is rendered through the same
+adapters as CLI apply, then filtered to `SourceID == memory/AGENTS.md`. The Core
+compares desired, last-applied, and destination hashes with the nine-case drift
+classifier. `clean`, `pending`, `new`, and `converged` are safe; native drift,
+conflict, a deleted owned file, or a foreign collision stops the whole Rule
+sync and returns a plain-text Diff.
+
+The normal sync request has no force mode. The explicit `backup-overwrite`
+resolution first copies every state-owned drift/conflict destination through
+`render.BackupFile`; foreign collisions are backed up by `render.Writer` itself.
+Only then does the normal adapter `Apply` path run and update `targets.json`.
+Rule-only synchronization deliberately records its Rule ops without pruning
+other component state.
+
+Manual project imports live in
+`~/.agentsync/.state/agent-assistant/projects.json`. Import validates and records
+the path, then asks adapters to render a harmless probe solely to obtain their
+verified project Rule destination paths. It does not initialize `.agentsync/`
+inside the project. Identical native bodies produce a deterministic proposal;
+divergent bodies may be sent, only on explicit user action, to the installed
+Codex CLI in a read-only ephemeral session with project rules ignored and a
+strict JSON output schema. AI output is a proposal only and never writes source
+or destinations.

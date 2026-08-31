@@ -64,3 +64,38 @@ func Save(path string, t *Targets) error {
 	}
 	return iox.AtomicWrite(path, append(data, '\n'), 0o644)
 }
+
+// LoadProjectRegistry reads agent-assistant's local imported-project list.
+// A missing file is an empty registry.
+func LoadProjectRegistry(path string) (*ProjectRegistry, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &ProjectRegistry{SchemaVersion: 1, Projects: []RegisteredProject{}}, nil
+		}
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var registry ProjectRegistry
+	if err := json.Unmarshal(data, &registry); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if registry.SchemaVersion != 1 {
+		return nil, fmt.Errorf("unsupported project registry schema %d", registry.SchemaVersion)
+	}
+	if registry.Projects == nil {
+		registry.Projects = []RegisteredProject{}
+	}
+	return &registry, nil
+}
+
+func SaveProjectRegistry(path string, registry *ProjectRegistry) error {
+	if registry == nil {
+		return fmt.Errorf("save nil project registry")
+	}
+	registry.SchemaVersion = 1
+	data, err := json.MarshalIndent(registry, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal project registry: %w", err)
+	}
+	return iox.AtomicWrite(path, append(data, '\n'), 0o600)
+}

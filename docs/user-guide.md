@@ -459,6 +459,27 @@ hand-mangled into an unbalanced/ambiguous state, agentsync refuses the write-bac
 rather than guess; the drift still shows in `status`/`diff` and you fold it into
 `memory/` by hand.
 
+### Managing Rules in the macOS client
+
+The desktop Rule workbench treats canonical memory as the Rule mother template.
+Choose global scope (`~/.agentsync/memory/AGENTS.md`) or an imported project's
+scope, select the target Agents, save the mother Rule, then preview before
+synchronizing. The preview shows every native destination and its drift class.
+
+If a native Rule has an edit that is not in the mother template, synchronization
+stops. Review the Diff and choose one explicit resolution: import that native
+Rule into the mother template for review, or back up the native file under
+`~/.agentsync/.state/backups/` and overwrite it. Unsupported Agent/scope pairs
+cannot be forced; deselect them or manage that native capability separately.
+
+The Projects view registers a local path in
+`~/.agentsync/.state/agent-assistant/projects.json`; importing alone writes
+nothing into the project. It discovers existing Rule files using verified
+adapter paths. Identical files produce a deterministic mother-Rule candidate.
+When they differ, the optional analysis action uses the installed Codex CLI in
+a read-only ephemeral session and returns a proposal. Review and save the
+proposal before any Agent files can be synchronized.
+
 **The managed banner.** Every rendered memory file is prepended with a short
 agentsync notice — a blockquote naming the file (e.g. `CLAUDE.md`) and pointing
 edits back at `.agentsync/memory/AGENTS.md` + `agentsync apply`. It is written by

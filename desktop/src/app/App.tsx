@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CoreClient } from '../core/client';
 import { DemoClient } from '../core/demo-client';
 import type { ApplyPreview, WorkspaceSnapshot } from '../core/model';
@@ -22,6 +22,10 @@ export function App() {
     const client = useMemo<CoreClient>(() => requestedMode === 'demo' ? new DemoClient() : new TauriCoreClient(), []);
     const isDemo = requestedMode === 'demo';
     const activeNav = navigationItems.find((item) => item.id === view) ?? navigationItems[0];
+
+    const refreshSnapshot = useCallback(async () => {
+        setSnapshot(await client.getSnapshot());
+    }, [client]);
 
     useEffect(() => {
         let cancelled = false;
@@ -63,7 +67,7 @@ export function App() {
                 {error && <div className="error-banner" role="alert"><span aria-hidden="true">!</span><span>{error}</span><button className="icon-button" type="button" aria-label="关闭错误" title="关闭错误" onClick={() => setError(null)}>×</button></div>}
                 <div className="content-area">
                     {isLoading && <div className="loading-state" role="status"><span className="loading-spinner" aria-hidden="true" />正在读取工作区…</div>}
-                    {!isLoading && snapshot && <ViewContent view={view} snapshot={snapshot} preview={preview} onPreview={handlePreview} />}
+                    {!isLoading && snapshot && <ViewContent view={view} snapshot={snapshot} preview={preview} onPreview={handlePreview} client={client} onSnapshotRefresh={refreshSnapshot} />}
                     {!isLoading && !snapshot && !error && <div className="empty-state page-empty"><span className="empty-icon" aria-hidden="true">◌</span><strong>暂无工作区数据</strong><p>连接 Core 后会在这里显示配置。</p></div>}
                 </div>
             </main>
@@ -71,11 +75,11 @@ export function App() {
     );
 }
 
-function ViewContent({ view, snapshot, preview, onPreview }: { view: ViewId; snapshot: WorkspaceSnapshot; preview: ApplyPreview | null; onPreview: () => void }) {
+function ViewContent({ view, snapshot, preview, onPreview, client, onSnapshotRefresh }: { view: ViewId; snapshot: WorkspaceSnapshot; preview: ApplyPreview | null; onPreview: () => void; client: CoreClient; onSnapshotRefresh: () => Promise<void> }) {
     switch (view) {
-        case 'global': return <GlobalView snapshot={snapshot} />;
+        case 'global': return <GlobalView snapshot={snapshot} client={client} onSnapshotRefresh={onSnapshotRefresh} />;
         case 'agents': return <AgentsView snapshot={snapshot} />;
-        case 'projects': return <ProjectsView snapshot={snapshot} />;
+        case 'projects': return <ProjectsView snapshot={snapshot} client={client} onSnapshotRefresh={onSnapshotRefresh} />;
         case 'activity': return <ActivityView snapshot={snapshot} />;
         default: return <OverviewView snapshot={snapshot} preview={preview} onPreview={onPreview} />;
     }

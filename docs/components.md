@@ -601,18 +601,26 @@ project technology Profiles, the explicit per-Agent capability registry, and
 the provenance manifest used by the `governance` CLI preflight. It does not own
 business rules or write native Agent files directly.
 
+### `internal/adapterregistry`
+
+Shared production wiring for all deep and generic adapters. CLI and desktop
+Core construct their registries here so Agent coverage and verified destination
+paths cannot diverge between interfaces.
+
 ### `internal/desktopcore`
 
-Read-only DTO boundary for the macOS Tauri client. It composes the canonical
-loader with bounded project discovery and the existing Codex/Cursor/Gemini
-native ingesters. It emits redacted metadata only; it is not a second source
-writer and must not resolve or persist secrets.
+Application boundary for the macOS Tauri client. Snapshot reads compose the
+canonical loader with bounded/manual project discovery and redacted native
+inventory. Rule commands edit only canonical memory, derive target paths from
+the shared adapters, classify drift, apply through `render.Writer`, and persist
+normal targets state. The optional Codex analyzer returns reviewable proposals;
+it has no write authority.
 
 ### `cmd/agent-assistant-core`
 
 The local JSON-line sidecar process used by the desktop shell. It accepts
-`snapshot` and `preview` methods on stdin and writes one JSON response to
-stdout (`schemaVersion: 1`). It has no network listener; Tauri locates it
-through `AGENT_ASSISTANT_CORE_BIN`, a sibling app binary, or `PATH`. Project
-discovery defaults to `$HOME/git/work` and can be bounded to another root with
-`AGENT_ASSISTANT_PROJECTS_ROOT`.
+snapshot/preview plus Rule load, save, sync, native import, project import, and
+project analysis methods on stdin and writes one JSON response to stdout. It has
+no network listener; Tauri locates it through `AGENT_ASSISTANT_CORE_BIN`, a
+sibling app binary, or `PATH`. Project discovery defaults to `$HOME/git/work`
+and can be bounded to another root with `AGENT_ASSISTANT_PROJECTS_ROOT`.

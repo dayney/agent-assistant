@@ -98,3 +98,63 @@ export interface ApplyPreview {
     unsupported: number;
     warnings: string[];
 }
+
+export type RuleScope = 'global' | 'project';
+
+export interface RuleRequest {
+    scope: RuleScope;
+    projectPath?: string;
+    agents?: string[];
+}
+
+export interface RuleDocument {
+    scope: RuleScope;
+    projectPath?: string;
+    canonicalPath: string;
+    body: string;
+    fragments: string[];
+    agents: string[];
+}
+
+export interface RuleTarget {
+    agent: string;
+    path?: string;
+    supported: boolean;
+    status: string;
+    blocked: boolean;
+    willWrite: boolean;
+    diff?: string;
+    reason?: string;
+}
+
+export interface RuleWorkspace {
+    document: RuleDocument;
+    targets: RuleTarget[];
+    availableAgents: string[];
+    blocked: boolean;
+}
+
+export interface RuleSyncResult {
+    preview: RuleWorkspace;
+    applied: boolean;
+    backups: Array<{ agent: string; sourcePath: string; backupPath: string }>;
+}
+
+export interface ProjectRuleSource {
+    path: string;
+    agents: string[];
+    body: string;
+}
+
+export interface ProjectRuleImport {
+    path: string;
+    sources: ProjectRuleSource[];
+    needsAnalysis: boolean;
+}
+
+export interface RuleProposal {
+    body: string;
+    notes: string[];
+    analyzer: string;
+    requiresAI: boolean;
+}
