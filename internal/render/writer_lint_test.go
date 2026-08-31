@@ -36,6 +36,7 @@ func TestNoDirectAtomicWriteOutsideAllowedFiles(t *testing.T) {
 		"internal/cli/plugin.go":           true,
 		"internal/cli/marketplace.go":      true,
 		"internal/cli/agent.go":            true,
+		"internal/cli/governance.go":       true, // writes the project .agentsync canonical source + local governance state
 		"internal/cli/gitbackup_config.go": true, // writes agentsync.toml (canonical source)
 		"internal/cli/reconcile.go":        true,
 		"internal/cli/plugin_poll.go":      true,
