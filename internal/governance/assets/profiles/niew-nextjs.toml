@@ -1,0 +1,30 @@
+id = "niew-nextjs"
+version = "2026.08.28"
+project_root = "/Users/krui/git/work/niew-nextjs"
+documentation_root = "/Users/krui/git/monorepo-docs/niew-nextjs"
+source_documents = ["STYLE.md", "CLAUDE.md", "AGENTS.md"]
+package_manager = "yarn"
+materialization_agents = ["codex", "cursor", "antigravity"]
+local_adapters = ["AGENTS.md"]
+stack = ["Next.js 15 App Router", "React 19", "JavaScript/JSX plus TypeScript", "Tailwind CSS 3.4", "Ant Design 5", "local shadcn/Radix UI primitives", "Sass/SCSS", "Zustand + React Context + legacy Redux", "Supabase", "next-intl", "FFmpeg + Wavesurfer", "LoveAI + Suno + Replicate", "Stripe + Paddle"]
+font_policy = "No new fonts or explicit font-family selection; inherit the current global font."
+rules = [
+  "Use the existing STYLE.md and module conventions; do not create a replacement project policy source.",
+  "Preserve existing CLAUDE.md, GEMINI.md, CodeWiki skill, and .gemini command files.",
+  "New ordinary UI uses the existing local primitives and Tailwind; check the module before using Ant Design.",
+  "Use next-intl for user-facing copy and preserve the existing authentication, billing, and Realtime contracts.",
+  "Do not run env:test or env:prod commands as part of local verification."
+]
+
+[commands]
+format = "yarn prettier --check ."
+lint = "yarn lint"
+typecheck = "yarn tsc --noEmit"
+build = "yarn build"
+i18n = "yarn i18n:verify"
+
+[defaults]
+ui = "Existing local primitives + Tailwind + cn()"
+state = "Preserve the current Context/Zustand/legacy Redux owner"
+api = "Reuse the established Supabase auth, validation, and error contracts"
+realtime = "Use the existing Supabase Realtime path"

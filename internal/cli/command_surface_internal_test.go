@@ -26,7 +26,7 @@ import (
 // in the same commit, and the CHANGELOG with it.
 func TestTopLevelCommandSurfaceIsPinned(t *testing.T) {
 	want := []string{
-		"agent", "apply", "check", "command", "diff", "doctor", "explain",
+		"agent", "apply", "check", "command", "diff", "doctor", "explain", "governance",
 		"hook", "import", "init", "lsp", "marketplace", "mcp", "migrate",
 		"plugin", "reconcile", "revert", "secret", "skill", "status",
 		"subagent", "version",

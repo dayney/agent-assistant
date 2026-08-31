@@ -46,6 +46,10 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 
 ### Added
 
+- **Agent governance preflight.** `governance scan`, `governance init`,
+  `governance check`, and `governance capabilities` expose the Baseline/Profile
+  contract and explicit capability matrix before an Agent edits project code.
+
 - **`status --legend`** prints a standalone glossary explaining all nine drift
   classification statuses (`clean`, `pending`, `drift`, `converged`,
   `conflict`, `new`, `foreign-collision`, `orphan`, `orphan-drifted`) and exits

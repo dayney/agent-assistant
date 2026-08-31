@@ -1,0 +1,30 @@
+id = "makebestmusic-nextjs"
+version = "2026.08.28"
+project_root = "/Users/krui/git/work/makebestmusic-nextjs"
+documentation_root = "/Users/krui/git/monorepo-docs/makebestmusic-nextjs"
+source_documents = ["docs/1-architecture/technology-stack.md", "docs/agent/AGENTS.md"]
+package_manager = "yarn"
+materialization_agents = []
+local_adapters = []
+stack = ["Next.js 14.2.2 App Router", "React 18", "JavaScript/JSX plus TypeScript", "Tailwind CSS 3.4", "local shadcn/Radix UI primitives", "Ant Design 5", "Sass/SCSS", "Zustand + React Context + legacy Redux", "Supabase", "next-intl", "FFmpeg + Wavesurfer"]
+font_policy = "No new fonts or explicit font-family selection; inherit the current global font."
+rules = [
+  "The project's canonical policy is docs/agent/AGENTS.md; preserve existing AGENTS.md and GEMINI.md symlinks.",
+  "New ordinary UI uses src/components/ui, Tailwind utilities, and cn(); existing Ant Design modules may continue using Ant Design.",
+  "Driver.js Tour CSS is an isolated third-party DOM adapter and is not a template for global CSS.",
+  "Use next-intl for new user-facing strings and Supabase Realtime for generation state.",
+  "Do not overwrite or materialize native adapter files unless the project manifest explicitly requires it."
+]
+
+[commands]
+format = "yarn prettier --check ."
+lint = "yarn lint"
+typecheck = "yarn tsc --noEmit"
+build = "yarn build"
+i18n = "yarn i18n:verify"
+
+[defaults]
+ui = "src/components/ui primitives + Tailwind + cn()"
+state = "Preserve the existing Redux/Zustand/Context owner"
+api = "Use the established handler and Supabase session middleware chain"
+realtime = "Supabase Realtime for asynchronous generation state"

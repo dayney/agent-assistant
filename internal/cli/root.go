@@ -91,6 +91,7 @@ func NewRoot() *cobra.Command {
 		newAgentCmd(),
 		newMigrateCmd(),
 		newDoctorCmd(),
+		newGovernanceCmd(),
 		newCheckCmd(),
 		newApplyCmd(),
 		newRevertCmd(),

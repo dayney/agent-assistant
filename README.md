@@ -60,6 +60,10 @@ New here? The **[User guide](docs/user-guide.md)** takes you 0→100.
     # … later, if an apply goes wrong:
     agentsync revert claude      # roll ~/.claude back to the previous checkpoint
 
+    # … inspect or initialize the project Agent governance contract:
+    agentsync governance scan --project ~/git/work/songai --json
+    agentsync governance check --project ~/git/work/songai
+
 ## Documentation
 
 The full docs are published with search and rendered diagrams at

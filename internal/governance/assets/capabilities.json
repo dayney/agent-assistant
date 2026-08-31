@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "agents": {
+    "codex": {
+      "tier": "deep",
+      "summary": "Native project rules, skills, MCP, and memory; commands, hooks, and subagents have adapter-specific limits.",
+      "components": {"rules": "full", "skills": "full", "mcp": "full", "commands": "partial", "hooks": "partial", "subagents": "partial"}
+    },
+    "cursor": {
+      "tier": "deep",
+      "summary": "Native rules, skills, MCP, commands, hooks, and project subagents with documented field and scope loss.",
+      "components": {"rules": "full", "skills": "full", "mcp": "full", "commands": "partial", "hooks": "partial", "subagents": "partial"}
+    },
+    "gemini": {
+      "tier": "deep",
+      "summary": "Native rules and MCP; skills are unsupported because Gemini uses extensions, and several components are projected.",
+      "components": {"rules": "full", "skills": "unsupported", "mcp": "partial", "commands": "partial", "hooks": "partial", "subagents": "partial"}
+    },
+    "antigravity": {
+      "tier": "breadth",
+      "summary": "Rules and skills are native; MCP is projected and commands, hooks, and subagents have no honest native target.",
+      "components": {"rules": "full", "skills": "full", "mcp": "partial", "commands": "unsupported", "hooks": "unsupported", "subagents": "unsupported"}
+    }
+  }
+}

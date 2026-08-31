@@ -21,6 +21,7 @@ import { Aside } from '@astrojs/starlight/components';
 | `init [<git-url>]` | Create `~/.agentsync/`; optionally clone a bootstrap repo. `--scope project` / `--project <path>` scaffolds a project tree instead. | `--scope --project` |
 | `doctor` | Diagnose setup: PATH, home/state writability, schema, secrets backend, destination-git-backup mode + per-dir repo status. | |
 | `check` | Validate the **config**: schema lint + unresolved `${secret:}` / `${env:}` refs. `--scope project` / `--project <path>` lints the project tree instead. (Renamed from `verify`.) | `--scope --project` |
+| `governance scan\|init\|check\|capabilities` | Read or initialize a project Baseline/Profile contract before Agent edits; reports capability loss explicitly. | `--scope --project --profile --agents --dry-run --force --json` |
 | `agent add\|remove\|list\|enable\|disable <name>` | Manage the agent registry — the user's, or a project tree's own `[agents]` declaration with `--scope project` / `--project <path>`. | `disable --purge --scope --project` |
 | `skill\|subagent\|command\|hook\|lsp list` | List that component in the canonical source (read-side only — none of these is flag-authorable). | `--scope --project` |
 | `migrate subagents` | One-shot move of the retired canonical `agents/` directory to `subagents/` (rewrites that tree's recorded `source_id` values). | `--scope --project` |

@@ -1301,3 +1301,19 @@ class-wide follow-up, since no other adapter filters ingest ownership yet. The s
 **key format** the filter reconstructs is not silently duplicated: the round-trip
 test seeds ownership through the real `render.RecordOpsState`, so any drift in the
 key scheme breaks that test rather than silently under-capturing.
+
+## 13. Project governance preflight
+
+`internal/governance` keeps the technology-neutral Baseline, project Profiles,
+and the explicit Agent capability registry separate from any one business
+repository. The `governance` CLI group exposes that model as a pre-edit
+preflight: `scan` is read-only, `init` writes only project-local governance
+source, `check` validates the selected contract, and `capabilities` reports
+unsupported or partial projections instead of pretending all Agent harnesses
+are equivalent.
+
+The Baseline owns universal decision boundaries. Profiles own project-specific
+stack, commands, documentation roots, and local adapter choices. Generated
+native Agent files are projections, not policy sources; an absent compliant
+implementation, a new dependency, a new state or styling system, or a lossy
+adapter requires an explicit stop rather than an invented fallback.

@@ -593,3 +593,10 @@ they're the foundation; `ui` (presentation) builds only on `untrusted`, and
 `log` only on `ui` (it wires `ui.SlogHandler` in as the slog default). See the
 rendered dependency graph in
 [architecture §12](architecture.md#12-package-layering).
+
+### `internal/governance`
+
+Embedded cross-project Agent governance model. It owns the universal Baseline,
+project technology Profiles, the explicit per-Agent capability registry, and
+the provenance manifest used by the `governance` CLI preflight. It does not own
+business rules or write native Agent files directly.
