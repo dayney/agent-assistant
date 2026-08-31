@@ -4,6 +4,14 @@
 /agentsync.exe
 /coverage.out
 /coverage.html
+/desktop/node_modules/
+/desktop/dist/
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/
+/desktop/src-tauri/agent-assistant-core
+/desktop/src-tauri/binaries/
+/output/playwright/
+/.playwright-cli/
 .vscode/
 .idea/
 *.swp

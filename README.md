@@ -44,6 +44,25 @@ configs quietly drift apart. agentsync fixes the fan-out:
 
 New here? The **[User guide](docs/user-guide.md)** takes you 0→100.
 
+### macOS desktop client
+
+The first macOS client is under [`desktop/`](desktop/). It is a Tauri 2 shell
+over the same Go Core, so it reads `~/.agentsync`, project `.agentsync` trees,
+and redacted metadata from supported native Agent files without creating a
+second configuration source.
+
+    cd desktop
+    npm install
+    npm run build:core
+    AGENT_ASSISTANT_CORE_BIN="$PWD/src-tauri/agent-assistant-core" npm run tauri:dev
+
+For a local `.app` bundle, use `npm run tauri:build`; it builds the Go sidecar
+for the current Mac target and includes it as a Tauri external binary.
+
+Use `npm run dev:demo` only for the approved visual prototype. Normal Tauri
+launches use real Core mode; if the sidecar is unavailable the client shows an
+error instead of falling back to demo data.
+
 ## Quickstart
 
     agentsync init

@@ -600,3 +600,19 @@ Embedded cross-project Agent governance model. It owns the universal Baseline,
 project technology Profiles, the explicit per-Agent capability registry, and
 the provenance manifest used by the `governance` CLI preflight. It does not own
 business rules or write native Agent files directly.
+
+### `internal/desktopcore`
+
+Read-only DTO boundary for the macOS Tauri client. It composes the canonical
+loader with bounded project discovery and the existing Codex/Cursor/Gemini
+native ingesters. It emits redacted metadata only; it is not a second source
+writer and must not resolve or persist secrets.
+
+### `cmd/agent-assistant-core`
+
+The local JSON-line sidecar process used by the desktop shell. It accepts
+`snapshot` and `preview` methods on stdin and writes one JSON response to
+stdout (`schemaVersion: 1`). It has no network listener; Tauri locates it
+through `AGENT_ASSISTANT_CORE_BIN`, a sibling app binary, or `PATH`. Project
+discovery defaults to `$HOME/git/work` and can be bounded to another root with
+`AGENT_ASSISTANT_PROJECTS_ROOT`.

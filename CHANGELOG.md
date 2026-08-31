@@ -46,6 +46,10 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 
 ### Added
 
+- **Read-only macOS desktop foundation.** The Tauri 2 shell connects to a local
+  Go JSON-line sidecar, reads canonical project trees plus whitelisted native
+  Agent metadata, and never returns secret values.
+
 - **Agent governance preflight.** `governance scan`, `governance init`,
   `governance check`, and `governance capabilities` expose the Baseline/Profile
   contract and explicit capability matrix before an Agent edits project code.

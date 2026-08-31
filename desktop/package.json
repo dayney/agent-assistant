@@ -1,0 +1,34 @@
+{
+  "name": "agent-assistant-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "dev:demo": "VITE_CORE_MODE=demo npm run dev",
+    "dev:real": "VITE_CORE_MODE=real npm run dev",
+    "tauri:dev": "npm run build:core:bundle && VITE_CORE_MODE=real tauri dev",
+    "build": "tsc --noEmit && vite build",
+    "build:core": "go build -o src-tauri/agent-assistant-core ../cmd/agent-assistant-core",
+    "build:core:bundle": "mkdir -p src-tauri/binaries && target=$(rustc -vV | sed -n 's/^host: //p') && go build -o src-tauri/binaries/agent-assistant-core-$target ../cmd/agent-assistant-core && cp src-tauri/binaries/agent-assistant-core-$target src-tauri/agent-assistant-core",
+    "tauri:build": "npm run build:core:bundle && tauri build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.0"
+  }
+}

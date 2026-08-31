@@ -1317,3 +1317,25 @@ stack, commands, documentation roots, and local adapter choices. Generated
 native Agent files are projections, not policy sources; an absent compliant
 implementation, a new dependency, a new state or styling system, or a lossy
 adapter requires an explicit stop rather than an invented fallback.
+
+## 14. Desktop client and local Core sidecar
+
+The macOS-first desktop client lives under `desktop/` and uses Tauri 2 with a
+React/TypeScript UI. Its Rust commands do not parse TOML, JSON, or secrets. They
+start the `agent-assistant-core` Go sidecar and exchange one JSON request/response
+per command over stdin/stdout. The sidecar reuses `source.Load` for canonical
+`~/.agentsync/` and project `.agentsync/` trees, and calls the existing Codex,
+Cursor, and Gemini ingest paths for a read-only native inventory.
+
+Native inventory is evidence, not policy. It is labelled `agent` provenance in
+the UI and is never written back automatically. The sidecar returns MCP names,
+transport, a redacted endpoint host, and secret references/configured status; it
+never reads auth/vault files or returns environment values. Real mode is the
+default for the Tauri app. Demo data is available only with the explicit
+`VITE_CORE_MODE=demo` setting, and a missing sidecar is surfaced as an error
+rather than silently replaced with demo data.
+
+The first desktop slice discovers project trees one level below
+`$HOME/git/work` (or `AGENT_ASSISTANT_PROJECTS_ROOT`) and reports “已发现” until
+the apply-state/drift projection is connected. It therefore does not claim that
+an observed native file has already been rendered or synchronized.
