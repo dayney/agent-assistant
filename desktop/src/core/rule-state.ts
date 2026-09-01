@@ -2,6 +2,7 @@ import type { RuleTarget } from './model';
 
 export interface RulePreviewIdentity {
     scope: 'global' | 'project';
+    projectPath?: string;
     body: string;
     selectedAgents: string[];
 }
@@ -26,6 +27,7 @@ export interface RuleCommandState {
 export function createRulePreviewKey(input: RulePreviewIdentity): string {
     return JSON.stringify({
         scope: input.scope,
+        projectPath: input.projectPath,
         body: input.body,
         selectedAgents: [...input.selectedAgents].sort(),
     });

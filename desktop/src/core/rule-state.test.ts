@@ -51,4 +51,24 @@ describe('Rule UI state', () => {
         expect(state.previewFresh).toBe(false);
         expect(state.canSync).toBe(false);
     });
+
+    it('invalidates preview when the project path changes', () => {
+        const previewKey = createRulePreviewKey({
+            scope: 'project', projectPath: '/projects/alpha', body: '# Rule\n', selectedAgents: ['codex'],
+        });
+        const state = deriveRuleCommandState({
+            scope: 'project', projectPath: '/projects/beta', body: '# Rule\n', savedBody: '# Rule\n',
+            selectedAgents: ['codex'], previewKey, targets: [safeTarget], busy: false,
+        });
+        expect(state.previewFresh).toBe(false);
+        expect(state.canSync).toBe(false);
+    });
+
+    it('keeps preview keys stable when Agent ordering changes', () => {
+        expect(createRulePreviewKey({
+            scope: 'global', body: '# Rule\n', selectedAgents: ['codex', 'claude'],
+        })).toBe(createRulePreviewKey({
+            scope: 'global', body: '# Rule\n', selectedAgents: ['claude', 'codex'],
+        }));
+    });
 });
