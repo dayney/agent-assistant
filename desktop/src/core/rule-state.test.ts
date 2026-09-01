@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { RuleTarget } from './model';
-import { blockedRuleTargets, toggleAgentSelection } from './rule-state';
+import {
+    blockedRuleTargets,
+    createRulePreviewKey,
+    deriveRuleCommandState,
+    toggleAgentSelection,
+} from './rule-state';
+
+const safeTarget: RuleTarget = {
+    agent: 'codex',
+    path: '/tmp/AGENTS.md',
+    supported: true,
+    status: 'clean',
+    blocked: false,
+    willWrite: true,
+};
 
 describe('Rule UI state', () => {
     it('returns only targets that require an explicit resolution', () => {
@@ -15,5 +29,26 @@ describe('Rule UI state', () => {
     it('keeps Agent selection unique and deterministic', () => {
         expect(toggleAgentSelection(['gemini', 'codex'], 'cursor', true)).toEqual(['codex', 'cursor', 'gemini']);
         expect(toggleAgentSelection(['codex', 'cursor'], 'codex', false)).toEqual(['cursor']);
+    });
+
+    it('requires an explicit fresh preview before synchronization', () => {
+        const state = deriveRuleCommandState({
+            body: '# Rule\n', savedBody: '# Rule\n', selectedAgents: ['codex'],
+            scope: 'global', previewKey: null, targets: [safeTarget], busy: false,
+        });
+        expect(state.canPreview).toBe(true);
+        expect(state.canSync).toBe(false);
+    });
+
+    it('invalidates preview when target selection changes', () => {
+        const previewKey = createRulePreviewKey({
+            scope: 'global', body: '# Rule\n', selectedAgents: ['codex'],
+        });
+        const state = deriveRuleCommandState({
+            body: '# Rule\n', savedBody: '# Rule\n', selectedAgents: ['claude', 'codex'],
+            scope: 'global', previewKey, targets: [safeTarget], busy: false,
+        });
+        expect(state.previewFresh).toBe(false);
+        expect(state.canSync).toBe(false);
     });
 });
