@@ -1,0 +1,86 @@
+name: platform-canary
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION_FILE: go.mod
+
+jobs:
+  canary:
+    name: ${{ matrix.product }} canary (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - product: cli
+            os: darwin
+            arch: arm64
+            tier: canary
+            runner: macos-latest
+          - product: desktop
+            os: darwin
+            arch: arm64
+            tier: canary
+            runner: macos-latest
+          - product: cli
+            os: windows
+            arch: amd64
+            tier: canary
+            runner: windows-latest
+          - product: desktop
+            os: windows
+            arch: amd64
+            tier: canary
+            runner: windows-latest
+          - product: cli
+            os: windows
+            arch: arm64
+            tier: preview
+            runner: windows-11-arm
+          - product: desktop
+            os: windows
+            arch: arm64
+            tier: preview
+            runner: windows-11-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+      - uses: extractions/setup-just@v3
+        if: matrix.product == 'cli'
+      - name: Test CLI
+        if: matrix.product == 'cli'
+        run: just test-fast && just test-platform
+      - uses: actions/setup-node@v7
+        if: matrix.product == 'desktop'
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Select pinned Rust toolchain
+        if: matrix.product == 'desktop'
+        run: rustup show active-toolchain
+      - name: Install Desktop dependencies
+        if: matrix.product == 'desktop'
+        working-directory: desktop
+        run: npm ci
+      - name: Test Desktop
+        if: matrix.product == 'desktop'
+        working-directory: desktop
+        run: npm test
+      - name: Type-check Desktop
+        if: matrix.product == 'desktop'
+        working-directory: desktop
+        run: npm run typecheck
+      - name: Build native Desktop bundle
+        if: matrix.product == 'desktop'
+        working-directory: desktop
+        run: npm run tauri:build

@@ -25,13 +25,16 @@ type MapEnv map[string]string
 func (m MapEnv) Get(key string) string { return m[key] }
 
 // HomeDir returns the effective home dir. AGENTSYNC_TARGET_ROOT takes precedence
-// (used by tests to redirect away from the real $HOME); otherwise falls back to
-// $HOME.
+// (used by tests to redirect away from the real home); otherwise it uses HOME
+// and then Windows' USERPROFILE.
 func HomeDir(e Env) string {
 	if root := e.Get("AGENTSYNC_TARGET_ROOT"); root != "" {
 		return root
 	}
-	return e.Get("HOME")
+	if home := e.Get("HOME"); home != "" {
+		return home
+	}
+	return e.Get("USERPROFILE")
 }
 
 // AgentsyncHome returns the directory where agentsync stores its source repo.

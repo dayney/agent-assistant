@@ -44,21 +44,23 @@ configs quietly drift apart. agentsync fixes the fan-out:
 
 New here? The **[User guide](docs/user-guide.md)** takes you 0→100.
 
-### macOS desktop client
+### Desktop client
 
-The macOS client is under [`desktop/`](desktop/). It is a Tauri 2 shell over the
-same Go Core, so `~/.agentsync` and project `.agentsync` trees remain the only
-canonical sources. Its Rule workbench edits a global or project mother Rule,
-previews deterministic per-Agent destinations, and stops on native drift with
-an explicit import-or-backup decision before any overwrite.
+The macOS and Windows client is under [`desktop/`](desktop/). It is a Tauri 2
+shell over the same Go Core, so `~/.agentsync` and project `.agentsync` trees
+remain the only canonical sources. Its Rule workbench edits a global or project
+mother Rule, previews deterministic per-Agent destinations, and stops on native
+drift with an explicit import-or-backup decision before any overwrite.
 
     cd desktop
-    npm install
-    npm run build:core
-    AGENT_ASSISTANT_CORE_BIN="$PWD/src-tauri/agent-assistant-core" npm run tauri:dev
+    npm ci
+    npm run tauri:dev
 
-For a local `.app` bundle, use `npm run tauri:build`; it builds the Go sidecar
-for the current Mac target and includes it as a Tauri external binary.
+For a local bundle, use `npm run tauri:build`; it builds the Go sidecar for the
+current target and includes it as a declared Tauri external binary. macOS emits
+an application and DMG; Windows emits an NSIS installer. See
+[`desktop/README.md`](desktop/README.md) for prerequisites, support tiers, and
+the signed-release boundary.
 
 Use `npm run dev:demo` only for the approved visual prototype. Normal Tauri
 launches use real Core mode; if the sidecar is unavailable the client shows an
@@ -134,6 +136,29 @@ same drift/secrets/capture pipeline as the deep adapters. See the
 Full ✓/◐/✗ breakdown per component: **[capability matrix](docs/capability-matrix.md)**.
 
 ## Install
+
+### macOS and Windows support policy
+
+`supported` targets are required native CI gates. `compatible` targets receive
+artifacts and best-effort fixes but are not regression-gated on every change.
+`preview` targets run scheduled canaries and may still have platform-specific
+gaps.
+
+| Product | Platform | Architecture | OS version range | Tier |
+| --- | --- | --- | --- | --- |
+| CLI | macOS | arm64, amd64 | 14+ | supported |
+| CLI | macOS | arm64, amd64 | 12-13 | compatible |
+| CLI | Windows | amd64 | 11 25H2+ | supported |
+| CLI | Windows | amd64 | 10-11 24H2 | compatible |
+| CLI | Windows | arm64 | 11 25H2+ | preview |
+| Desktop | macOS | arm64, amd64 | 14+ | supported |
+| Desktop | Windows | amd64 | 11 25H2+ | supported |
+| Desktop | Windows | arm64 | 11 25H2+ | preview |
+
+The machine-readable source of truth is
+[`platform-support.json`](platform-support.json). Desktop downloads are not
+advertised until the signed release gate is enabled; source builds are
+available now.
 
 ### macOS — Homebrew
 

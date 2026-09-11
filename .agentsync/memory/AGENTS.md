@@ -275,6 +275,9 @@ doc, `.golangci.yml` (forbidigo rules), and `SECURITY.md`.
 
 - `just build` / `just test-fast`; full gate `just test-release` (hermetic container).
 - FS-touching tests refuse to run on host without `AGENTSYNC_TEST_IN_CONTAINER=1`.
+  The sole exception is `test/platform`, which is the native macOS/Windows CLI
+  lifecycle smoke: it requires `AGENTSYNC_PLATFORM_TEST=1` and redirects every
+  source, destination, and user path under `t.TempDir()`.
 - Lint/format/tidy with `just lint` — the single dev entry point. It rewrites Go
   sources (`gofmt -s` + gofumpt) and deliberately tidies `go.mod`/`go.sum`
   (`go mod tidy`) in place, then runs golangci-lint via `go run
@@ -282,7 +285,7 @@ doc, `.golangci.yml` (forbidigo rules), and `SECURITY.md`.
   linter self-bootstraps (no separate install or PATH step); `go run pkg@version`
   resolves gofumpt and golangci-lint outside the main module, so *those* never
   land in `go.mod`, and golangci-lint compiles with the local Go toolchain (≥
-  go.mod's **1.26.2**) so it parses our export data natively. CI runs this exact
+  go.mod's **1.26.5**) so it parses our export data natively. CI runs this exact
   recipe then `git diff --exit-code`, so an uncommitted format/tidy change fails
   the build — local and CI can't drift.
   - **After running `just lint`, always re-stage any files it rewrote before
@@ -295,7 +298,7 @@ doc, `.golangci.yml` (forbidigo rules), and `SECURITY.md`.
   - **Container/cloud sessions — the golangci-lint toolchain quirk (READ THIS).**
     In CI the base toolchain already matches go.mod, so `just lint` "just works"
     with no `GOTOOLCHAIN` override. In a remote/cloud container the base `go` on
-    PATH is often an older **bootstrap** (e.g. go1.24.7); the go1.26.2 we
+    PATH is often an older **bootstrap** (e.g. go1.24.7); the go1.26.5 we
     build/test with is itself an auto-downloaded toolchain selected from go.mod.
     `golangci-lint@v2.12.2` pins `toolchain go1.25.11` in *its* module, so
     `GOTOOLCHAIN=auto` builds the linter with **1.25.11** — and a linter built
@@ -303,7 +306,7 @@ doc, `.golangci.yml` (forbidigo rules), and `SECURITY.md`.
     (go1.25) used to build golangci-lint is lower than the targeted Go version
     (1.26)."* This is NOT a code problem and NOT a reason to skip linting. Fix:
     run it (and `go mod tidy`) with the **exact** matching toolchain forced —
-    `GOTOOLCHAIN=go1.26.2 go run
+    `GOTOOLCHAIN=go1.26.5 go run
     github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run ./...`.
     (`GOTOOLCHAIN=local` is the wrong lever — it drops to the bootstrap go, which
     is *below* golangci-lint's `>=1.25` floor and fails differently. Force the
@@ -311,7 +314,7 @@ doc, `.golangci.yml` (forbidigo rules), and `SECURITY.md`.
 
 - `just test` (full unit/integration in container), `just test-e2e`,
   `just test-bdd`, `just test-live` (network, opt-in, not in the release gate).
-- Go version is `go.mod`'s `go` directive (currently **1.26.2**); CI reads it via
+- Go version is `go.mod`'s `go` directive (currently **1.26.5**); CI reads it via
   `go-version-file`. Bump in one place.
 - **CI checks all failing within seconds with zero steps run** (run annotation:
   "The job was not started because recent account payments have failed or your
@@ -326,7 +329,10 @@ doc, `.golangci.yml` (forbidigo rules), and `SECURITY.md`.
 - **Filesystem in tests** is always `afero.NewMemMapFs()` or `t.TempDir()`, never
   `os.UserHomeDir()` — a `forbidigo` rule bans it in `_test.go` (use
   `paths.HomeDir(env)`). FS-touching tests must run in the container; call
-  `testenv.RequireContainer(t)` / `MustRunInContainer()`.
+  `testenv.RequireContainer(t)` / `MustRunInContainer()`. The narrow
+  `test/platform` exception runs on native CI only when
+  `AGENTSYNC_PLATFORM_TEST=1` and must redirect all relevant home/config paths
+  into its test-owned `t.TempDir()`.
 - **Errors** wrap with `fmt.Errorf("doing X: %w", err)`; match with `errors.Is/As`.
   No `pkg/errors`.
 - **Imports** grouped stdlib / third-party / internal; gofumpt + goimports

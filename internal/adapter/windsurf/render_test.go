@@ -48,6 +48,7 @@ func TestRender_UserScope_MCPGlobalRulesAndWorkflows(t *testing.T) {
 	op := findOp(ops, ".codeium/windsurf/mcp_config.json")
 	if op == nil {
 		t.Fatal("mcp_config.json op missing at user scope")
+		return
 	}
 	if op.MergeStrategy != "merge-json-keys" {
 		t.Fatalf("merge strategy = %q, want merge-json-keys", op.MergeStrategy)
@@ -62,6 +63,7 @@ func TestRender_UserScope_MCPGlobalRulesAndWorkflows(t *testing.T) {
 	memOp := findOp(ops, filepath.Join(".codeium", "windsurf", "memories", "global_rules.md"))
 	if memOp == nil {
 		t.Fatalf("global_rules.md op missing at user scope: %+v", ops)
+		return
 	}
 	if !strings.HasPrefix(string(memOp.Content), "<!-- agentsync:managed memory-banner -->") {
 		t.Fatalf("expected managed banner prefix on global rules: %q", memOp.Content)
@@ -122,6 +124,7 @@ func TestRender_ProjectScope_RulesAndWorkflows(t *testing.T) {
 	memOp := findOp(ops, ".windsurf/rules/agentsync.md")
 	if memOp == nil {
 		t.Fatal("rules/agentsync.md op missing at project scope")
+		return
 	}
 	// The activation frontmatter must stay at byte 0; the managed banner sits
 	// after it and strips back out to leave frontmatter + verbatim body.
@@ -138,6 +141,7 @@ func TestRender_ProjectScope_RulesAndWorkflows(t *testing.T) {
 	cmdOp := findOp(ops, ".windsurf/workflows/deploy.md")
 	if cmdOp == nil {
 		t.Fatal("workflows/deploy.md op missing")
+		return
 	}
 	if string(cmdOp.Content) != "Run deploy.\n" {
 		t.Fatalf("workflow should be plain body: %q", cmdOp.Content)

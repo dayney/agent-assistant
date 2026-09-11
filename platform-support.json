@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "toolchains": {
+    "go": "1.26.5",
+    "node": "24.21.0",
+    "rust": "1.98.0",
+    "goreleaser": "2.17.1"
+  },
+  "targets": [
+    {
+      "id": "cli-macos-arm64",
+      "product": "cli",
+      "os": "darwin",
+      "arch": "arm64",
+      "minimumVersion": "14",
+      "tier": "supported",
+      "runner": "macos-14",
+      "cadence": "required"
+    },
+    {
+      "id": "cli-macos-amd64",
+      "product": "cli",
+      "os": "darwin",
+      "arch": "amd64",
+      "minimumVersion": "14",
+      "tier": "supported",
+      "runner": "macos-15-intel",
+      "cadence": "required"
+    },
+    {
+      "id": "cli-macos-arm64-compat",
+      "product": "cli",
+      "os": "darwin",
+      "arch": "arm64",
+      "minimumVersion": "12",
+      "maximumVersion": "13",
+      "tier": "compatible",
+      "cadence": "none"
+    },
+    {
+      "id": "cli-macos-amd64-compat",
+      "product": "cli",
+      "os": "darwin",
+      "arch": "amd64",
+      "minimumVersion": "12",
+      "maximumVersion": "13",
+      "tier": "compatible",
+      "cadence": "none"
+    },
+    {
+      "id": "cli-windows-amd64",
+      "product": "cli",
+      "os": "windows",
+      "arch": "amd64",
+      "minimumVersion": "11 25H2",
+      "tier": "supported",
+      "runner": "windows-2022",
+      "cadence": "required"
+    },
+    {
+      "id": "cli-windows-amd64-compat",
+      "product": "cli",
+      "os": "windows",
+      "arch": "amd64",
+      "minimumVersion": "10",
+      "maximumVersion": "11 24H2",
+      "tier": "compatible",
+      "cadence": "none"
+    },
+    {
+      "id": "cli-windows-arm64",
+      "product": "cli",
+      "os": "windows",
+      "arch": "arm64",
+      "minimumVersion": "11 25H2",
+      "tier": "preview",
+      "runner": "windows-11-arm",
+      "cadence": "scheduled"
+    },
+    {
+      "id": "desktop-macos-arm64",
+      "product": "desktop",
+      "os": "darwin",
+      "arch": "arm64",
+      "minimumVersion": "14",
+      "tier": "supported",
+      "runner": "macos-14",
+      "cadence": "required"
+    },
+    {
+      "id": "desktop-macos-amd64",
+      "product": "desktop",
+      "os": "darwin",
+      "arch": "amd64",
+      "minimumVersion": "14",
+      "tier": "supported",
+      "runner": "macos-15-intel",
+      "cadence": "required"
+    },
+    {
+      "id": "desktop-windows-amd64",
+      "product": "desktop",
+      "os": "windows",
+      "arch": "amd64",
+      "minimumVersion": "11 25H2",
+      "tier": "supported",
+      "runner": "windows-2022",
+      "cadence": "required"
+    },
+    {
+      "id": "desktop-windows-arm64",
+      "product": "desktop",
+      "os": "windows",
+      "arch": "arm64",
+      "minimumVersion": "11 25H2",
+      "tier": "preview",
+      "runner": "windows-11-arm",
+      "cadence": "scheduled"
+    }
+  ]
+}

@@ -37,10 +37,10 @@
 # network on the first run for the goreleaser module download.
 set -euo pipefail
 
-# Keep this pin in lock-step with ci.yml / release.yml / justfile — ci.yml's
-# "Guard goreleaser version pin" step asserts the workflow+justfile pins agree
+# Keep this pin in lock-step with ci.yml / release.yml / justfile. CI's
+# "Guard goreleaser version pin" step includes this script in the parity check
 # (issue #138); this script reuses the justfile's `go run pkg@version` pattern.
-GORELEASER="github.com/goreleaser/goreleaser/v2@v2.16.0"
+GORELEASER="github.com/goreleaser/goreleaser/v2@v2.17.1"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
@@ -51,10 +51,10 @@ echo "==> building two snapshots into $out/{a,b}"
 build() { # build <dest-dir> [extra flags...] — one snapshot, then move dist/ aside
 	local dest="$1"
 	shift
-	# Skips: publish (no credentials in a local run) and sign (cosign is a
-	# release-only dependency installed by release.yml). The snapshot still
-	# builds the full cross-matrix archives plus the nfpms deb/rpm.
-	go run "$GORELEASER" release --snapshot --clean --skip=publish,sign "$@"
+	# Skips: publish (no credentials in a local run), Chocolatey (choco is
+	# release-only), and sign (cosign is installed by release.yml). The snapshot
+	# still builds the full cross-matrix archives plus the nfpms deb/rpm.
+	go run "$GORELEASER" release --snapshot --clean --skip=publish,chocolatey,sign "$@"
 	mv dist "$dest"
 }
 

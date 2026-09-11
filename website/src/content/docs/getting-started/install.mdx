@@ -84,6 +84,30 @@ import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
 	</TabItem>
 </Tabs>
 
+## macOS and Windows support
+
+`supported` targets are required native CI gates. `compatible` targets receive
+artifacts and best-effort fixes but are not regression-gated on every change.
+`preview` targets run scheduled canaries and may still have platform-specific
+gaps.
+
+| Product | Platform | Architecture | OS version range | Tier |
+| --- | --- | --- | --- | --- |
+| CLI | macOS | arm64, amd64 | 14+ | supported |
+| CLI | macOS | arm64, amd64 | 12-13 | compatible |
+| CLI | Windows | amd64 | 11 25H2+ | supported |
+| CLI | Windows | amd64 | 10-11 24H2 | compatible |
+| CLI | Windows | arm64 | 11 25H2+ | preview |
+| Desktop | macOS | arm64, amd64 | 14+ | supported |
+| Desktop | Windows | amd64 | 11 25H2+ | supported |
+| Desktop | Windows | arm64 | 11 25H2+ | preview |
+
+Desktop can be built from source today. Signed Desktop downloads are not
+advertised until the separate signing and notarization release gate is enabled.
+The repository's
+[machine-readable policy](https://github.com/spxrogers/agentsync/blob/main/platform-support.json)
+is the source of truth for versions, architectures, CI runners, and cadence.
+
 ## From source
 
 Prefer to build it yourself, or want the latest unreleased commit?
@@ -100,7 +124,7 @@ cd agentsync
 go build ./cmd/agentsync
 ```
 
-You'll need Go ≥ 1.26.2 (the version pinned in `go.mod`).
+You'll need Go >= 1.26.5 (the version pinned in `go.mod`).
 
 ## Verify
 

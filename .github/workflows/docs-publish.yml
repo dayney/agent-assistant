@@ -32,9 +32,9 @@ concurrency:
 jobs:
   docs:
     name: docs-publish (agentsync.cc)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - uses: extractions/setup-just@v3
       # `just docs-publish` runs `git push` from a throwaway repo it inits inside

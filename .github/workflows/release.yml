@@ -98,7 +98,7 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "skip=--skip=chocolatey" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         # Full history + tags so goreleaser can build the changelog and derive
         # the version from the tag. On `push: tags` the checked-out ref IS the
         # tag; on `workflow_dispatch` it's the dispatched branch, and the step
@@ -123,7 +123,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           scripts/release-tag.sh "$VERSION"
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       # Make `choco` available so the ENTIRE release — including the Chocolatey
@@ -164,14 +164,14 @@ jobs:
       # cosign for the keyless checksum signature (goreleaser's signs: block shells
       # out to `cosign sign-blob`). Keyless uses this job's OIDC token (permissions
       # id-token: write on this job) — no signing key is stored (issue #138).
-      - uses: sigstore/cosign-installer@v3
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: sigstore/cosign-installer@v4
+      - uses: goreleaser/goreleaser-action@v7
         with:
           # Pinned so releases are reproducible run-to-run (Go is pinned via
           # go-version-file). One invocation builds every channel — GitHub Release,
           # archives/checksums, deb/rpm, Homebrew cask, Scoop bucket, and (when the
           # push key is present) the Chocolatey .nupkg — from one set of artifacts.
-          version: "2.16.0"
+          version: "2.17.1"
           # `skip` is empty when the choco key is present (the chocolatey pipe runs)
           # or `--skip=chocolatey` when absent (every other channel still ships).
           args: release --clean ${{ steps.choco_flag.outputs.skip }}
@@ -192,6 +192,28 @@ jobs:
           # `choco push` credential for the chocolatey pipe (the pipe is skipped
           # when this is unset, per the `skip` arg computed above).
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+
+  # Desktop distribution is deliberately opt-in until the repository has both
+  # Apple and Windows signing identities. Enabling the variable without every
+  # credential makes desktop-release.yml fail closed before it builds/uploads.
+  desktop-release:
+    name: desktop (signed distribution)
+    needs: goreleaser
+    if: vars.DESKTOP_RELEASE_ENABLED == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      tag: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    secrets: inherit
+
+  desktop-release-disabled:
+    name: Desktop distribution disabled
+    needs: goreleaser
+    if: vars.DESKTOP_RELEASE_ENABLED != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "::notice::Desktop distribution disabled; set DESKTOP_RELEASE_ENABLED=true only after provisioning every Apple and Windows signing credential."
 
   # Redeploy agentsync.cc after a successful publish so the live docs always
   # track the just-released CLI. The build/force-push steps live in the reusable

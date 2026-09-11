@@ -11,6 +11,23 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 
 ### Changed
 
+- **macOS and Windows support is now an explicit, tested contract.** CLI and
+  Desktop targets, minimum OS versions, architectures, support tiers, native CI
+  runners, and pinned Go/Node/Rust/GoReleaser versions live in
+  `platform-support.json`. Required jobs use fixed runners; floating macOS,
+  Windows, and Windows ARM64 coverage is isolated to scheduled canaries.
+- **Desktop now builds its Go Core sidecar portably and launches it through
+  Tauri's declared sidecar API.** The same build command supports Apple Silicon,
+  Intel Mac, Windows x64, and Windows ARM64, including the `.exe` naming rule;
+  release builds ignore the development binary override and packaged mode no
+  longer searches sibling directories or `PATH`. Desktop health checks now
+  start and query the sidecar instead of treating command construction as proof
+  that the binary is available.
+- **Windows home discovery now works outside Unix-like shells.** When `HOME` is
+  absent, agentsync falls back to `USERPROFILE`, so Explorer-launched CLI and
+  Desktop processes resolve canonical and destination paths under the user's
+  real profile instead of a relative working directory.
+
 - **`--lossless` now says what its check did not consider.** The lossiness probe
   renders every enabled agent from a canonical carrying no plugin provenance, so
   it does not honour a plugin's `agents` / `native_agents`: a skip on an agent
@@ -45,6 +62,20 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
   plugins natively and went unexamined, whether or not a duplicate was found.
 
 ### Added
+
+- **Windows Desktop packaging and fail-closed signed releases.** Desktop builds
+  now produce macOS app/DMG and Windows NSIS bundles. Public Desktop publishing
+  is separately gated behind `DESKTOP_RELEASE_ENABLED`; when enabled it requires
+  Apple signing/notarization and Windows Authenticode credentials and verifies
+  every artifact before upload. Prerelease/build tag metadata remains on the
+  GitHub release while native package versions use the numeric `X.Y.Z` core.
+- **Native platform smoke and Desktop build gates.** The CLI exercises
+  `init -> agent add -> apply -> status` inside a temporary redirected home on
+  required macOS and Windows runners, while Desktop CI runs frontend, sidecar,
+  Rust, and native bundle checks.
+- **Desktop application icon packaging.** Tauri now embeds the project icon in
+  macOS and Windows bundles instead of allowing the operating system's generic
+  placeholder icon.
 
 - **Desktop Rule management.** The macOS client now edits global and project
   mother Rules, previews all production Agent adapters, blocks on native drift
@@ -99,6 +130,12 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 
 ### Fixed
 
+- **The hermetic release gate now starts on macOS's system Bash.** Its Docker
+  build path no longer expands an empty array under `set -u`, which Bash 3.2
+  reports as an `unbound variable` before the test container can start.
+- **The local GoReleaser snapshot now matches CI's tool exclusions.** `just ci`
+  skips Chocolatey packaging as well as publishing and signing, so it no longer
+  requires the release-only `choco` executable during a local snapshot.
 - **`apply`'s translation report no longer over-counts.** Every per-agent count
   honours the providing plugin's gates now; previously none did, so a deferred
   plugin's components were counted under another plugin's row for the same agent

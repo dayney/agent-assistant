@@ -104,6 +104,7 @@ func TestIngest_ReadsSkillArtifact(t *testing.T) {
 	}
 	if sk == nil {
 		t.Fatalf("skill 'greet' not ingested; got %d skills", len(out.Skills))
+		return
 	}
 	if sk.Frontmatter["description"] != "greet the user" {
 		t.Errorf("description = %v, want %q", sk.Frontmatter["description"], "greet the user")
@@ -119,6 +120,7 @@ func TestIngest_ReadsSkillArtifact(t *testing.T) {
 	}
 	if bundled == nil {
 		t.Fatalf("bundled scripts/run.sh not captured; files=%+v", sk.Files)
+		return
 	}
 	if string(bundled.Content) != "#!/bin/sh\necho hi\n" {
 		t.Errorf("bundled content = %q, want the on-disk bytes", bundled.Content)

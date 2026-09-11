@@ -1,6 +1,11 @@
 use serde::Serialize;
+use std::ffi::OsString;
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+
+const CORE_SIDECAR: &str = "agent-assistant-core";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,8 +15,11 @@ pub struct CoreHealth {
 }
 
 #[tauri::command]
-fn core_health() -> CoreHealth {
-    if core_binary().is_some() {
+async fn core_health(app: tauri::AppHandle) -> CoreHealth {
+    if invoke_core(&app, "health", serde_json::Value::Null)
+        .await
+        .is_ok()
+    {
         CoreHealth {
             status: "ready",
             mode: "sidecar",
@@ -25,132 +33,179 @@ fn core_health() -> CoreHealth {
 }
 
 #[tauri::command]
-fn get_workspace_snapshot() -> Result<serde_json::Value, String> {
-    invoke_core("snapshot", serde_json::Value::Null)
+async fn get_workspace_snapshot(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "snapshot", serde_json::Value::Null).await
 }
 
 #[tauri::command]
-fn preview_apply() -> Result<serde_json::Value, String> {
-    invoke_core("preview", serde_json::Value::Null)
+async fn preview_apply(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "preview", serde_json::Value::Null).await
 }
 
 #[tauri::command]
-fn rules_get(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    invoke_core("rules_get", request)
+async fn rules_get(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "rules_get", request).await
 }
 
 #[tauri::command]
-fn rules_save(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    invoke_core("rules_save", request)
+async fn rules_save(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "rules_save", request).await
 }
 
 #[tauri::command]
-fn rules_sync(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    invoke_core("rules_sync", request)
+async fn rules_sync(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "rules_sync", request).await
 }
 
 #[tauri::command]
-fn rules_import_native(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    invoke_core("rules_import_native", request)
+async fn rules_import_native(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "rules_import_native", request).await
 }
 
 #[tauri::command]
-fn project_import(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    invoke_core("project_import", request)
+async fn project_import(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "project_import", request).await
 }
 
 #[tauri::command]
-fn project_analyze_rules(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    invoke_core("project_analyze_rules", request)
+async fn project_analyze_rules(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    invoke_core(&app, "project_analyze_rules", request).await
 }
 
-fn core_binary() -> Option<std::path::PathBuf> {
-    if let Ok(path) = std::env::var("AGENT_ASSISTANT_CORE_BIN") {
-        let path = std::path::PathBuf::from(path);
-        if path.is_file() {
-            return Some(path);
-        }
+fn development_core_binary() -> Option<PathBuf> {
+    if !cfg!(debug_assertions) {
+        return None;
     }
-    if let Ok(executable) = std::env::current_exe() {
-        if let Some(parent) = executable.parent() {
-            for name in [
-                "agent-assistant-core",
-                "agent-assistant-core-aarch64-apple-darwin",
-                "agent-assistant-core-x86_64-apple-darwin",
-            ] {
-                let sibling = parent.join(name);
-                if sibling.is_file() {
-                    return Some(sibling);
-                }
-            }
-            if let Ok(entries) = std::fs::read_dir(parent) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_file()
-                        && path
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .is_some_and(|name| name.starts_with("agent-assistant-core-"))
-                    {
-                        return Some(path);
-                    }
-                }
-            }
-            if let Some(manifest_dir) = parent.parent().and_then(std::path::Path::parent) {
-                let development_sidecar = manifest_dir.join("agent-assistant-core");
-                if development_sidecar.is_file() {
-                    return Some(development_sidecar);
-                }
-            }
-        }
-    }
-    which_core_binary()
+    development_core_binary_for(true, std::env::var_os("AGENT_ASSISTANT_CORE_BIN"))
 }
 
-fn which_core_binary() -> Option<std::path::PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    for directory in std::env::split_paths(&path) {
-        let candidate = directory.join("agent-assistant-core");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
+fn development_core_binary_for(enabled: bool, value: Option<OsString>) -> Option<PathBuf> {
+    if !enabled {
+        return None;
     }
-    None
+    value.map(PathBuf::from).filter(|path| path.is_file())
 }
 
-fn invoke_core(method: &str, payload: serde_json::Value) -> Result<serde_json::Value, String> {
-    let binary = core_binary().ok_or_else(|| {
-        "core_unavailable: agent-assistant-core was not found; set AGENT_ASSISTANT_CORE_BIN or place the sidecar beside the app".to_string()
-    })?;
+async fn invoke_core(
+    app: &tauri::AppHandle,
+    method: &str,
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let request = encode_core_request(method, payload)?;
+    if let Some(binary) = development_core_binary() {
+        return invoke_development_core(binary, &request);
+    }
+    invoke_bundled_core(app, &request).await
+}
+
+fn invoke_development_core(binary: PathBuf, request: &[u8]) -> Result<serde_json::Value, String> {
     let mut child = Command::new(binary)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("core_spawn_failed: {error}"))?;
-    let request = if payload.is_null() {
-        serde_json::json!({"method": method})
-    } else {
-        serde_json::json!({"method": method, "payload": payload})
-    };
     child
         .stdin
         .as_mut()
         .ok_or_else(|| "core_spawn_failed: sidecar stdin unavailable".to_string())?
-        .write_all(format!("{request}\n").as_bytes())
+        .write_all(request)
         .map_err(|error| format!("core_write_failed: {error}"))?;
     drop(child.stdin.take());
     let output = child
         .wait_with_output()
         .map_err(|error| format!("core_wait_failed: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "core_exit_failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
+    decode_core_response(output.status.success(), &output.stdout, &output.stderr)
+}
+
+async fn invoke_bundled_core(
+    app: &tauri::AppHandle,
+    request: &[u8],
+) -> Result<serde_json::Value, String> {
+    let command = app
+        .shell()
+        .sidecar(CORE_SIDECAR)
+        .map_err(|error| format!("core_unavailable: {error}"))?;
+    let (mut events, mut child) = command
+        .spawn()
+        .map_err(|error| format!("core_spawn_failed: {error}"))?;
+    child
+        .write(request)
+        .map_err(|error| format!("core_write_failed: {error}"))?;
+    drop(child);
+
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut successful = false;
+    let mut event_failed = false;
+    while let Some(event) = events.recv().await {
+        match event {
+            CommandEvent::Stdout(line) => {
+                stdout.extend(line);
+                stdout.push(b'\n');
+            }
+            CommandEvent::Stderr(line) => {
+                stderr.extend(line);
+                stderr.push(b'\n');
+            }
+            CommandEvent::Error(error) => {
+                event_failed = true;
+                stderr.extend(error.as_bytes());
+            }
+            CommandEvent::Terminated(payload) => successful = payload.code == Some(0),
+            _ => {}
+        }
     }
-    let value: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("core_protocol_failed: {error}"))?;
+    decode_core_response(successful && !event_failed, &stdout, &stderr)
+}
+
+fn encode_core_request(method: &str, payload: serde_json::Value) -> Result<Vec<u8>, String> {
+    let request = if payload.is_null() {
+        serde_json::json!({"method": method})
+    } else {
+        serde_json::json!({"method": method, "payload": payload})
+    };
+    let mut encoded =
+        serde_json::to_vec(&request).map_err(|error| format!("core_protocol_failed: {error}"))?;
+    encoded.push(b'\n');
+    Ok(encoded)
+}
+
+fn decode_core_response(
+    successful: bool,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Result<serde_json::Value, String> {
+    if !successful {
+        let detail = String::from_utf8_lossy(stderr);
+        let detail = detail.trim();
+        let detail = if detail.is_empty() {
+            "sidecar exited without an error message"
+        } else {
+            detail
+        };
+        return Err(format!("core_exit_failed: {detail}"));
+    }
+    let value: serde_json::Value =
+        serde_json::from_slice(stdout).map_err(|error| format!("core_protocol_failed: {error}"))?;
     if let Some(error) = value.get("error").and_then(serde_json::Value::as_str) {
         return Err(format!("core_read_failed: {error}"));
     }
@@ -159,6 +214,7 @@ fn invoke_core(method: &str, payload: serde_json::Value) -> Result<serde_json::V
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             core_health,
             get_workspace_snapshot,
@@ -172,4 +228,58 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running agent-assistant");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{decode_core_response, development_core_binary_for, encode_core_request};
+    use std::ffi::OsString;
+
+    #[test]
+    fn core_request_is_one_json_line() {
+        let request = encode_core_request("snapshot", serde_json::Value::Null).unwrap();
+        assert_eq!(request, b"{\"method\":\"snapshot\"}\n");
+    }
+
+    #[test]
+    fn core_request_includes_non_null_payload() {
+        let request =
+            encode_core_request("rules_get", serde_json::json!({"scope": "global"})).unwrap();
+        assert_eq!(
+            request,
+            b"{\"method\":\"rules_get\",\"payload\":{\"scope\":\"global\"}}\n"
+        );
+    }
+
+    #[test]
+    fn nonzero_core_exit_uses_stderr() {
+        let error = decode_core_response(false, b"", b"permission denied\n").unwrap_err();
+        assert_eq!(error, "core_exit_failed: permission denied");
+    }
+
+    #[test]
+    fn invalid_core_json_is_a_protocol_error() {
+        let error = decode_core_response(true, b"not-json", b"").unwrap_err();
+        assert!(error.starts_with("core_protocol_failed:"), "{error}");
+    }
+
+    #[test]
+    fn core_error_field_is_not_returned_as_success() {
+        let error =
+            decode_core_response(true, br#"{"error":"source unavailable"}"#, b"").unwrap_err();
+        assert_eq!(error, "core_read_failed: source unavailable");
+    }
+
+    #[test]
+    fn valid_core_json_is_returned() {
+        let value = decode_core_response(true, br#"{"schemaVersion":1}"#, b"").unwrap();
+        assert_eq!(value["schemaVersion"], 1);
+    }
+
+    #[test]
+    fn release_mode_ignores_the_development_binary_override() {
+        let current_executable = std::env::current_exe().unwrap();
+        let value = Some(OsString::from(current_executable));
+        assert_eq!(development_core_binary_for(false, value), None);
+    }
 }

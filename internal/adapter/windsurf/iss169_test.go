@@ -187,6 +187,7 @@ func TestIngestMCPSpec_UrlCanonicalizedToServerUrl(t *testing.T) {
 	op := findOp(ops, "mcp_config.json")
 	if op == nil {
 		t.Fatal("mcp_config.json op missing")
+		return
 	}
 	var ours map[string]any
 	if err := json.Unmarshal(op.Content, &ours); err != nil {

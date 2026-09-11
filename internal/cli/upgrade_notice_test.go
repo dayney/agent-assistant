@@ -79,6 +79,7 @@ func TestUpgradeNotice_ShownOnceOnUpgrade(t *testing.T) {
 	rec := readLastRun(t, tmp)
 	if rec == nil {
 		t.Fatal("last-run.json was not recorded")
+		return
 	}
 	// Pin the literal ID, not just "some id". The ID is the real key — a rename
 	// re-shows the notice to everyone who already dismissed it — so a test that

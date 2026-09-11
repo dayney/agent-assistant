@@ -10,11 +10,12 @@ If you're new to the codebase, read [`docs/concepts.md`](docs/concepts.md) then
 
 ## Prerequisites
 
-- **Go** — the version in [`go.mod`](go.mod)'s `go` directive (currently 1.26.2).
+- **Go** — the version in [`go.mod`](go.mod)'s `go` directive (currently 1.26.5).
 - **[`just`](https://github.com/casey/just)** — the task runner. `just` with no
   args lists every recipe.
 - **podman** (preferred) or **docker** — the test suite runs in a hermetic
-  container (see below). Only the pure-unit and live cohorts run on the host.
+  container (see below). Only the pure-unit, native-platform, and live cohorts
+  run on the host.
 - **golangci-lint v2.12.2** — match CI exactly. Its release binary is built with
   Go 1.26 so it can parse this module's export data; an older local build will
   refuse to run.
@@ -28,7 +29,7 @@ just build          # → ./bin/agentsync
 ## Test
 
 Every `just test*` recipe runs **inside a hermetic container** (podman first,
-docker fallback) — except the two explicit on-host opt-ins below. The repo is
+docker fallback) — except the three explicit on-host opt-ins below. The repo is
 mounted read-only, the network is off, and each test's `HOME` is a fresh tmpdir,
 so the suite can never touch your real `~/.claude.json`, `~/.config/opencode/`,
 or `~/.agentsync/`.
@@ -36,6 +37,7 @@ or `~/.agentsync/`.
 | Recipe | What it runs |
 |---|---|
 | `just test-fast` | Pure-unit packages on the host (no container, no FS). Fast iteration. |
+| `just test-platform` | Native macOS/Windows CLI lifecycle smoke; requires its dedicated opt-in and redirects all agentsync paths under `t.TempDir()`. |
 | `just test` | Unit + integration in the container. |
 | `just test-e2e` | Lifecycle end-to-end (build tag `e2e`). |
 | `just test-bdd` | Gherkin behaviour lock (build tag `bdd`). |
@@ -48,6 +50,10 @@ container during debugging:
 ```bash
 AGENTSYNC_TEST_IN_CONTAINER=1 go test ./internal/cli/ -run TestApply_FirstRun
 ```
+
+The only routine native exception is `just test-platform`, which sets
+`AGENTSYNC_PLATFORM_TEST=1` itself and remains isolated by the test's redirected
+source, destination, home, XDG, and Windows application-data paths.
 
 ## Lint & format
 

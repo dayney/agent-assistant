@@ -1,4 +1,4 @@
-// agent-assistant-core is the local JSON-line sidecar for the macOS client.
+// agent-assistant-core is the local JSON-line sidecar for the Desktop client.
 // It has no network listener and reads only the user's canonical files.
 package main
 
@@ -38,6 +38,8 @@ func main() {
 			continue
 		}
 		switch strings.ToLower(req.Method) {
+		case "health":
+			_ = encoder.Encode(map[string]string{"status": "ready", "mode": "sidecar"})
 		case "snapshot", "get_workspace_snapshot":
 			snapshot, err := desktopcore.ReadSnapshot(options)
 			if err != nil {

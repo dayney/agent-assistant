@@ -94,6 +94,29 @@ choco install agentsync
 **Linux** — `.deb`/`.rpm` on the [Releases page](https://github.com/spxrogers/agentsync/releases).
 (AUR packaging is wired but not published yet — [issue #13](https://github.com/spxrogers/agentsync/issues/13).)
 
+### macOS and Windows support tiers
+
+`supported` targets are required native CI gates. `compatible` targets receive
+artifacts and best-effort fixes but are not regression-gated on every change.
+`preview` targets run scheduled canaries and may still have platform-specific
+gaps.
+
+| Product | Platform | Architecture | OS version range | Tier |
+| --- | --- | --- | --- | --- |
+| CLI | macOS | arm64, amd64 | 14+ | supported |
+| CLI | macOS | arm64, amd64 | 12-13 | compatible |
+| CLI | Windows | amd64 | 11 25H2+ | supported |
+| CLI | Windows | amd64 | 10-11 24H2 | compatible |
+| CLI | Windows | arm64 | 11 25H2+ | preview |
+| Desktop | macOS | arm64, amd64 | 14+ | supported |
+| Desktop | Windows | amd64 | 11 25H2+ | supported |
+| Desktop | Windows | arm64 | 11 25H2+ | preview |
+
+The canonical policy, including CI runners and cadence, is
+[`platform-support.json`](../platform-support.json). Linux CLI packages remain
+part of the release gate; this table records the explicit macOS and Windows
+version contract introduced for CLI and Desktop together.
+
 Verify:
 
 ```bash
@@ -459,7 +482,7 @@ hand-mangled into an unbalanced/ambiguous state, agentsync refuses the write-bac
 rather than guess; the drift still shows in `status`/`diff` and you fold it into
 `memory/` by hand.
 
-### Managing Rules in the macOS client
+### Managing Rules in the Desktop client
 
 The desktop Rule workbench treats canonical memory as the Rule mother template.
 Choose global scope (`~/.agentsync/memory/AGENTS.md`) or an imported project's
@@ -479,6 +502,14 @@ adapter paths. Identical files produce a deterministic mother-Rule candidate.
 When they differ, the optional analysis action uses the installed Codex CLI in
 a read-only ephemeral session and returns a proposal. Review and save the
 proposal before any Agent files can be synchronized.
+
+Desktop source builds use the repository-pinned Go 1.26.5, Node.js 24.21.0, and
+Rust 1.98.0 toolchains. From `desktop/`, run `npm ci`, `npm test`, and
+`npm run tauri:build`. The native output is a DMG on macOS and an NSIS installer
+on Windows. Public Desktop artifacts are uploaded only by the separately gated
+release workflow after macOS signing/notarization and Windows Authenticode
+verification succeed; source-build support does not imply that unsigned local
+artifacts are official distributions.
 
 **The managed banner.** Every rendered memory file is prepended with a short
 agentsync notice — a blockquote naming the file (e.g. `CLAUDE.md`) and pointing

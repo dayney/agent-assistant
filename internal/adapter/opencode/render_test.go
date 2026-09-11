@@ -330,6 +330,7 @@ func TestRender_Subagent_FrontmatterMunge(t *testing.T) {
 	}
 	if op == nil {
 		t.Fatal("no agent op")
+		return
 	}
 	if !strings.Contains(string(op.Content), "mode: subagent") {
 		t.Fatalf("missing mode:subagent in: %s", op.Content)
@@ -528,6 +529,7 @@ func TestRender_Command_FrontmatterMunge(t *testing.T) {
 	}
 	if op == nil {
 		t.Fatal("no command op")
+		return
 	}
 	content := string(op.Content)
 	if !strings.Contains(content, "description: Summarize code") {

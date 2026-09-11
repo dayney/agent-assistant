@@ -883,8 +883,9 @@ All present in v1.0 (`internal/iox`, `internal/render`, `internal/state`):
 2. **File lock** — `gofrs/flock` on `.state/apply.lock` serializes concurrent
    `apply`/`reconcile`. `apply --dry-run` is read-only and takes no lock.
 3. **`AGENTSYNC_TARGET_ROOT`** — every dest path resolves through one helper
-   (`internal/paths`), so tests redirect `$HOME` to a tmpdir. A `forbidigo` rule
-   bans `os.UserHomeDir()` in `_test.go`.
+   (`internal/paths`), which uses `HOME` on Unix and falls back to `USERPROFILE`
+   for Windows GUI launches. Tests redirect the home to a tmpdir. A `forbidigo`
+   rule bans `os.UserHomeDir()` in `_test.go`.
 4. **First-apply backups** — the `foreign-collision` case copies the pre-existing
    destination into `.state/backups/<ts>/` before writing. Symlinked
    destinations are refused by default.
@@ -1320,13 +1321,19 @@ adapter requires an explicit stop rather than an invented fallback.
 
 ## 14. Desktop client and local Core sidecar
 
-The macOS-first desktop client lives under `desktop/` and uses Tauri 2 with a
-React/TypeScript UI. Its Rust commands do not parse TOML, Agent files, or
+The macOS and Windows desktop client lives under `desktop/` and uses Tauri 2
+with a React/TypeScript UI. Its Rust commands do not parse TOML, Agent files, or
 secrets. They start the `agent-assistant-core` Go sidecar and exchange one JSON
 request/response per command over stdin/stdout. The sidecar reuses
 `source.Load`, the shared production adapter registry, `render`, `drift`, and
 `state`; the desktop is an authoring surface over existing agentsync contracts,
 not a second configuration engine.
+
+Packaged builds launch only Tauri's declared `agent-assistant-core` sidecar.
+`AGENT_ASSISTANT_CORE_BIN` is an explicit development/test override; packaged
+mode does not scan sibling directories or `PATH`. One portable Node resolver
+maps the audited Apple and Windows Rust triples to Go build targets and applies
+the Windows `.exe` suffix. Unknown triples fail closed.
 
 Native inventory is evidence, not policy. It is labelled `agent` provenance in
 the UI and is never written back automatically. The sidecar returns MCP names,
@@ -1340,6 +1347,16 @@ The first desktop slice discovers project trees one level below
 `$HOME/git/work` (or `AGENT_ASSISTANT_PROJECTS_ROOT`) and reports “已发现” until
 the apply-state/drift projection is connected. It therefore does not claim that
 an observed native file has already been rendered or synchronized.
+
+The root `platform-support.json` is the machine-readable macOS/Windows contract
+for CLI and Desktop. Required CI uses explicit native runners for supported
+targets; floating `latest` and Windows ARM64 are scheduled canaries. Desktop
+release is separate from GoReleaser: it remains disabled until the repository
+sets `DESKTOP_RELEASE_ENABLED=true`, and then fails in preflight unless all
+Apple signing/notarization and Windows Authenticode credentials are present.
+Only verified DMG and NSIS artifacts are uploaded. The GitHub release retains
+the full SemVer tag, while native package metadata uses its numeric `X.Y.Z`
+core to satisfy Apple and Windows version-field constraints.
 
 ### Rule authoring and synchronization
 

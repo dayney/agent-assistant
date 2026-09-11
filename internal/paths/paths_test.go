@@ -23,6 +23,16 @@ func TestHomeDir(t *testing.T) {
 			env:  map[string]string{"HOME": "/Users/real"},
 			want: "/Users/real",
 		},
+		{
+			name: "falls back to USERPROFILE when HOME is absent",
+			env:  map[string]string{"USERPROFILE": `C:\Users\alice`},
+			want: `C:\Users\alice`,
+		},
+		{
+			name: "HOME takes precedence over USERPROFILE",
+			env:  map[string]string{"HOME": "/Users/real", "USERPROFILE": `C:\Users\alice`},
+			want: "/Users/real",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

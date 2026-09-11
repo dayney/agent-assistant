@@ -2,8 +2,10 @@
 #
 # Run `just` (no args) to see this list. Run `just <recipe>` to invoke one.
 #
-# Hermeticity contract: every `test*` recipe (except `test-fast` and
-# `test-live`) runs inside the container — podman-first, docker fallback.
+# Hermeticity contract: every `test*` recipe (except `test-fast`,
+# `test-platform`, and `test-live`) runs inside the container — podman-first,
+# docker fallback. `test-platform` is the explicit native-runner smoke test; it
+# redirects every agentsync source/destination path into a test temp directory.
 # The repo is mounted read-only and the network is off, so a misbehaving
 # test can never touch your real ~/.claude.json, ~/.config/opencode/, or
 # ~/.agentsync/. `test-live` is the explicit exception: live tests need
@@ -62,6 +64,12 @@ test-fast:
         ./internal/adapter \
         ./internal/adapter/noop/... \
         ./internal/testenv/...
+
+# Native macOS/Windows lifecycle smoke. The package refuses ordinary host
+# invocation unless this dedicated opt-in is set, and keeps all writes under a
+# t.TempDir-owned source/destination root.
+test-platform:
+    AGENTSYNC_PLATFORM_TEST=1 go test -count=1 ./test/platform/...
 
 # Live tests fetch real upstream sources (e.g. cloning
 # github.com/obra/superpowers via go-git) so they run on host with their
@@ -127,7 +135,7 @@ docs-publish:
 ci: lint test-release
     # Skip sign too: the snapshot signs by default, but cosign is a release-only
     # dep (release.yml installs it); `just ci` proves the cross-build, not signing.
-    go run github.com/goreleaser/goreleaser/v2@v2.16.0 release --snapshot --skip=publish,sign --clean
+    go run github.com/goreleaser/goreleaser/v2@v2.17.1 release --snapshot --skip=publish,chocolatey,sign --clean
 
 # Cut a release: validate `v`+semver, then tag & push (which fires the release workflow). Usage: `just release v0.1.0`
 # No laptop? Trigger the same release from the GitHub UI/mobile app instead:

@@ -89,6 +89,14 @@ can resolve secrets into native config files. Areas of particular interest:
 - **Destination writes**: writes are atomic and refuse to clobber symlinked
   destinations by default; pre-existing foreign files are backed up before
   overwrite.
+- **Desktop distribution**: a source-built Desktop bundle is not an official
+  distribution. The Desktop release workflow is disabled until maintainers
+  explicitly enable it and provision every required credential. Once enabled,
+  missing Apple signing/notarization or Windows Authenticode credentials fail
+  before upload; macOS DMGs must pass signature, Gatekeeper, and notarization
+  ticket checks, and Windows NSIS installers must pass signature verification.
+  The Windows bundle uses Tauri's embedded WebView2 bootstrapper, so installation
+  does not depend on an unverified runtime download URL configured by this repo.
 
 ## Sensitive files
 
@@ -99,4 +107,7 @@ Do not commit your age identity file, decrypted secrets, or
 ## Supported versions
 
 Until the first stable (`v1.0.0`) release, only the latest tagged version is
-supported for security fixes.
+supported for security fixes. Runtime platform tiers and minimum macOS/Windows
+versions are defined separately in [`platform-support.json`](platform-support.json);
+`compatible` and `preview` describe test coverage, not extended security support
+for older agentsync releases.

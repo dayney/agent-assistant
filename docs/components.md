@@ -471,8 +471,9 @@ Per-key JSON-pointer merge that preserves foreign keys and uses `json.Number`
 - **Files:** `jsonkeys.go`.
 
 ### `internal/paths`
-Resolves `AGENTSYNC_HOME`, `AGENTSYNC_TARGET_ROOT`, and `$HOME`; converts between
-absolute and `${HOME}`-relative forms for portable state.
+Resolves `AGENTSYNC_HOME`, `AGENTSYNC_TARGET_ROOT`, and the native user home
+(`HOME`, then Windows `USERPROFILE`); converts between absolute and
+`${HOME}`-relative forms for portable state.
 - **Key:** `Env` (interface), `OSEnv`, `MapEnv`; `HomeDir`; `AgentsyncHome`;
   `HomeRelative`/`FromHomeRelative`.
 - **Files:** `paths.go`.
@@ -609,18 +610,21 @@ paths cannot diverge between interfaces.
 
 ### `internal/desktopcore`
 
-Application boundary for the macOS Tauri client. Snapshot reads compose the
-canonical loader with bounded/manual project discovery and redacted native
-inventory. Rule commands edit only canonical memory, derive target paths from
-the shared adapters, classify drift, apply through `render.Writer`, and persist
-normal targets state. The optional Codex analyzer returns reviewable proposals;
-it has no write authority.
+Application boundary for the macOS and Windows Tauri client. Snapshot reads
+compose the canonical loader with bounded/manual project discovery and redacted
+native inventory. Rule commands edit only canonical memory, derive target paths
+from the shared adapters, classify drift, apply through `render.Writer`, and
+persist normal targets state. The optional Codex analyzer returns reviewable
+proposals; it has no write authority.
 
 ### `cmd/agent-assistant-core`
 
-The local JSON-line sidecar process used by the desktop shell. It accepts
-snapshot/preview plus Rule load, save, sync, native import, project import, and
-project analysis methods on stdin and writes one JSON response to stdout. It has
-no network listener; Tauri locates it through `AGENT_ASSISTANT_CORE_BIN`, a
-sibling app binary, or `PATH`. Project discovery defaults to `$HOME/git/work`
-and can be bounded to another root with `AGENT_ASSISTANT_PROJECTS_ROOT`.
+The local JSON-line sidecar process used by the desktop shell. It accepts a
+health probe, snapshot/preview, Rule load/save/sync/native import, project
+import, and project analysis methods on stdin and writes one JSON response to
+stdout. It has no network listener. Packaged Tauri builds launch the declared
+external binary;
+`AGENT_ASSISTANT_CORE_BIN` is reserved for development and tests, with no
+sibling-directory or `PATH` fallback. Project discovery defaults to
+`$HOME/git/work` and can be bounded to another root with
+`AGENT_ASSISTANT_PROJECTS_ROOT`.

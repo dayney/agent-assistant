@@ -19,7 +19,7 @@
 # they intentionally live outside this image so the image stays small and
 # rebuildable in restrictive networks.
 
-ARG GO_VERSION=1.26.2
+ARG GO_VERSION=1.26.5
 FROM docker.io/library/golang:${GO_VERSION}-bookworm
 
 # The golang:bookworm base already ships git, bash, curl, ca-certificates,

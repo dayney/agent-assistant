@@ -1,0 +1,269 @@
+name: desktop-release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing GitHub release tag that receives Desktop assets
+        required: true
+        type: string
+    secrets:
+      APPLE_CERTIFICATE:
+        required: false
+      APPLE_CERTIFICATE_PASSWORD:
+        required: false
+      APPLE_SIGNING_IDENTITY:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+      KEYCHAIN_PASSWORD:
+        required: false
+      WINDOWS_CERTIFICATE:
+        required: false
+      WINDOWS_CERTIFICATE_PASSWORD:
+        required: false
+      WINDOWS_TIMESTAMP_URL:
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  preflight:
+    name: signing credential preflight
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Require a release tag and every signing credential
+        id: validate
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          set -euo pipefail
+          scripts/release-tag.sh --validate-only "$TAG"
+          version="$(scripts/release-tag.sh --package-version "$TAG")"
+          missing=()
+          for name in \
+            APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+            APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID KEYCHAIN_PASSWORD \
+            WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD WINDOWS_TIMESTAMP_URL
+          do
+            value="${!name:-}"
+            if [[ -z "${value//[[:space:]]/}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Desktop release is enabled but signing credentials are missing: ${missing[*]}"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: signed macOS (${{ matrix.arch }})
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+            target: aarch64-apple-darwin
+          - arch: amd64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Select pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install Desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Import Apple Developer certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          certificate="$RUNNER_TEMP/desktop-certificate.p12"
+          keychain="$RUNNER_TEMP/desktop-signing.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE" | openssl base64 -d -A -out "$certificate"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          security find-identity -v -p codesigning "$keychain" | grep -F "$APPLE_SIGNING_IDENTITY"
+      - name: Prepare Desktop release version
+        id: config
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          config="$RUNNER_TEMP/desktop-release.json"
+          printf '{"version":"%s"}\n' "$VERSION" > "$config"
+          echo "path=$config" >> "$GITHUB_OUTPUT"
+      - name: Build signed and notarized DMG
+        working-directory: desktop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          npm run build:core:bundle -- --target "${{ matrix.target }}"
+          npm run tauri -- build --target "${{ matrix.target }}" --bundles dmg --config "${{ steps.config.outputs.path }}"
+      - name: Verify signature, notarization, and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          app=$(find desktop/src-tauri/target -type d -path '*/bundle/macos/*.app' -print -quit)
+          dmg=$(find desktop/src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)
+          test -n "$app" && test -n "$dmg"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          codesign --verify --verbose=2 "$dmg"
+          xcrun notarytool submit "$dmg" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+      - name: Upload signed DMG to the existing release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          dmg=$(find desktop/src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)
+          gh release upload "$TAG" "$dmg" --clobber
+      - name: Remove temporary signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/desktop-signing.keychain-db" || true
+
+  windows:
+    name: signed Windows (${{ matrix.arch }}, ${{ matrix.tier }})
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.tier == 'preview' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            tier: supported
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+          - arch: arm64
+            tier: preview
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Select pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install Desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Import Windows certificate and prepare signing config
+        id: signing
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'desktop-certificate.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText
+          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if (-not $certificate -or -not $certificate.HasPrivateKey) {
+            throw 'Imported Windows signing certificate has no private key'
+          }
+          $config = @{
+            version = $env:VERSION
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $certificate.Thumbprint
+                digestAlgorithm = 'sha256'
+                timestampUrl = $env:WINDOWS_TIMESTAMP_URL
+              }
+            }
+          }
+          $configPath = Join-Path $env:RUNNER_TEMP 'desktop-release.json'
+          $config | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Encoding utf8NoBOM
+          "config=$configPath" >> $env:GITHUB_OUTPUT
+      - name: Build signed NSIS installer
+        shell: pwsh
+        working-directory: desktop
+        env:
+          RUST_TARGET: ${{ matrix.target }}
+          TAURI_SIGNING_CONFIG: ${{ steps.signing.outputs.config }}
+        run: |
+          npm run build:core:bundle -- --target $env:RUST_TARGET
+          npm run tauri -- build --target $env:RUST_TARGET --bundles nsis --config $env:TAURI_SIGNING_CONFIG
+      - name: Verify Authenticode signature
+        id: installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target -Recurse -File -Filter '*setup.exe' | Select-Object -First 1
+          if (-not $installer) {
+            throw 'NSIS installer was not produced'
+          }
+          $sdkArch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\$sdkArch\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) {
+            throw "signtool.exe was not found for $sdkArch"
+          }
+          & $signtool.FullName verify /pa /all /v $installer.FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Authenticode verification failed'
+          }
+          "path=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+      - name: Upload signed NSIS installer to the existing release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+          INSTALLER: ${{ steps.installer.outputs.path }}
+        run: gh release upload $env:TAG $env:INSTALLER --clobber

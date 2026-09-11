@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Single source of truth for cutting a release tag: validate a `v`+SemVer-2.0.0
 # version, refuse a duplicate, then create the annotated tag and push it (which
-# fires .github/workflows/release.yml). Both release entry points call this so
+# fires .github/workflows/release.yml). Every release entry point calls this so
 # the version rule lives in exactly ONE place — no drift between them:
 #   - `just release vX.Y.Z`                      (the laptop path)
 #   - the `release` workflow's manual-dispatch step (the no-laptop path; it sets
 #     a bot git identity, then calls this)
+#   - the Desktop signing preflight uses `--validate-only` and
+#     `--package-version` before packaging
 #
 # `scripts/release-tag.sh --self-test` exercises the validator against a table of
 # good/bad versions and makes no git changes; CI runs it (ci.yml) so the regex
@@ -22,11 +24,21 @@ version_valid() {
 	[[ "$1" =~ $SEMVER ]]
 }
 
+# package_version <v+semver>: print the numeric core used by native package
+# metadata. GitHub keeps the full tag while Apple and Windows receive X.Y.Z.
+package_version() {
+	version_valid "$1" || return 1
+	local version="${1#v}"
+	version="${version%%[-+]*}"
+	printf '%s\n' "$version"
+}
+
 # self_test: assert the validator accepts every good case and rejects every bad
 # one. Pure — touches no git state. Exits non-zero (failing CI) on any mismatch.
 self_test() {
 	local good=(v0.0.0 v0.1.0 v0.6.0 v1.2.3 v10.20.30 v1.2.3-rc.1 v1.2.3-0.3.7 v1.0.0-alpha v1.0.0-alpha.1 v1.0.0+build.1 v1.2.3-rc.1+build.5)
 	local bad=("" 1.2.3 v1.2 v1 vfoo v1.2.3. v01.2.3 v1.02.3 "v1.2.3 " " v1.2.3" v1.2.3- V1.2.3 $'v1.2.3\nrm -rf x')
+	local package_cases=(v0.0.0 0.0.0 v1.2.3 1.2.3 v1.2.3-rc.1 1.2.3 v1.2.3+build.5 1.2.3 v1.2.3-rc.1+build.5 1.2.3)
 	local rc=0 v
 	for v in "${good[@]}"; do
 		if ! version_valid "$v"; then
@@ -37,6 +49,14 @@ self_test() {
 	for v in "${bad[@]}"; do
 		if version_valid "$v"; then
 			echo "self-test FAIL: '$v' should be INVALID" >&2
+			rc=1
+		fi
+	done
+	local i got
+	for ((i = 0; i < ${#package_cases[@]}; i += 2)); do
+		got="$(package_version "${package_cases[i]}")"
+		if [[ "$got" != "${package_cases[i + 1]}" ]]; then
+			echo "self-test FAIL: package version for '${package_cases[i]}' = '$got', want '${package_cases[i + 1]}'" >&2
 			rc=1
 		fi
 	done
@@ -51,10 +71,35 @@ main() {
 		self_test
 		return
 	fi
+	if [[ "${1:-}" == "--validate-only" ]]; then
+		local candidate="${2:-}"
+		if [[ -z "$candidate" ]]; then
+			echo "usage: release-tag.sh --validate-only <vX.Y.Z>" >&2
+			exit 2
+		fi
+		if ! version_valid "$candidate"; then
+			echo "release: '$candidate' must start with 'v' and be valid semver (e.g. v0.1.0, v1.2.3-rc.1)" >&2
+			exit 1
+		fi
+		echo "release-tag validation: OK ($candidate)"
+		return
+	fi
+	if [[ "${1:-}" == "--package-version" ]]; then
+		local candidate="${2:-}"
+		if [[ -z "$candidate" ]]; then
+			echo "usage: release-tag.sh --package-version <vX.Y.Z>" >&2
+			exit 2
+		fi
+		if ! package_version "$candidate"; then
+			echo "release: '$candidate' must start with 'v' and be valid semver (e.g. v0.1.0, v1.2.3-rc.1)" >&2
+			exit 1
+		fi
+		return
+	fi
 
 	local version="${1:-}"
 	if [[ -z "$version" ]]; then
-		echo "usage: release-tag.sh <vX.Y.Z> | --self-test" >&2
+		echo "usage: release-tag.sh <vX.Y.Z> | --self-test | --validate-only <vX.Y.Z> | --package-version <vX.Y.Z>" >&2
 		exit 2
 	fi
 	if ! version_valid "$version"; then

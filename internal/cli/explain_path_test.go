@@ -454,6 +454,7 @@ func TestExplainPath_PluginOriginAttributed(t *testing.T) {
 	pl := m.Owners[0].Items[0].Plugin
 	if pl == nil {
 		t.Fatalf("plugin origin not attributed for a plugin-projected component:\n%s", out)
+		return
 	}
 	if !strings.HasPrefix(pl.ID, "demo") {
 		t.Errorf("plugin id = %q, want the demo plugin", pl.ID)

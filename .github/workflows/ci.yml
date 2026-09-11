@@ -9,6 +9,7 @@ name: ci
 on:
   pull_request:
   workflow_call:
+  workflow_dispatch:
 
 # Single source of truth for the Go version: go.mod's `go` directive.
 # setup-go reads it via go-version-file below.
@@ -16,36 +17,113 @@ env:
   GO_VERSION_FILE: go.mod
 
 jobs:
-  # Pure-unit tests across the supported OS matrix. These never touch the
-  # filesystem (per internal/testenv.RequireContainer), so they're safe on
-  # any host runner and give us cross-platform coverage that the Linux-only
-  # container suite below can't.
+  # Pure-unit tests across the supported OS matrix, plus the isolated native
+  # lifecycle smoke on macOS and Windows. Runner labels are explicit: `latest`
+  # belongs in platform-canary.yml, not the required support contract.
   test-fast:
-    name: test-fast (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: test-fast (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - product: cli
+            os: linux
+            arch: amd64
+            tier: supported
+            runner: ubuntu-24.04
+          - product: cli
+            os: darwin
+            arch: arm64
+            tier: supported
+            runner: macos-14
+          - product: cli
+            os: darwin
+            arch: amd64
+            tier: supported
+            runner: macos-15-intel
+          - product: cli
+            os: windows
+            arch: amd64
+            tier: supported
+            runner: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ env.GO_VERSION_FILE }}
       - uses: extractions/setup-just@v3
       - run: just test-fast
+      - name: Native CLI lifecycle smoke
+        if: matrix.os != 'linux'
+        run: just test-platform
+
+  # A platform is not a supported Desktop target until its full web + sidecar +
+  # Rust + native bundle chain succeeds on the corresponding architecture.
+  desktop-native:
+    name: desktop (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - product: desktop
+            os: darwin
+            arch: arm64
+            tier: supported
+            runner: macos-14
+          - product: desktop
+            os: darwin
+            arch: amd64
+            tier: supported
+            runner: macos-15-intel
+          - product: desktop
+            os: windows
+            arch: amd64
+            tier: supported
+            runner: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Select pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Install Desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Test Desktop frontend and sidecar resolver
+        working-directory: desktop
+        run: npm test
+      - name: Type-check Desktop frontend
+        working-directory: desktop
+        run: npm run typecheck
+      - name: Build Go sidecar
+        working-directory: desktop
+        run: npm run build:core:bundle
+      - name: Test Rust shell
+        working-directory: desktop
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Build native Desktop bundle
+        working-directory: desktop
+        run: npm run tauri:build
 
   # The release-readiness gate: every FS-touching test layer in one
   # hermetic container run. Linux only — the Containerfile targets
   # linux/amd64 and the container is the hermeticity guarantee.
   test-release:
     name: test-release (hermetic gate)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # If this job ever fails again with no obvious cause, set
     # `AGENTSYNC_TEST_DEBUG: "1"` here to enable `set -x` tracing in the
     # runner script + entrypoint. Off by default to keep logs readable.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: extractions/setup-just@v3
       - run: just test-release
 
@@ -54,10 +132,10 @@ jobs:
   # change fails the build (CI and local can't drift).
   lint:
     name: lint (fmt + tidy + golangci-lint)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ env.GO_VERSION_FILE }}
       - uses: extractions/setup-just@v3
@@ -83,8 +161,9 @@ jobs:
             echo "::error file=.goreleaser.yaml::publisher token/private_key must use a bare {{ .Env.X }} template — envOrDefault/isEnvSet are unavailable in that context and fail at publish"
             exit 1
           fi
-      # The goreleaser version is pinned in FOUR places (ci.yml x2, release.yml
-      # x1, justfile x1). This is the C3 "dual-list drift" class — assert they
+      # The goreleaser version is pinned in FIVE places (ci.yml x2, release.yml
+      # x1, justfile x1, reproducibility script x1). This is the C3 "dual-list
+      # drift" class — assert they
       # never diverge, so the toolchain that validates a release can't differ
       # from the one that ships it (issue #138). The workflow-side pins are
       # anchored to the goreleaser-action steps themselves (the `version:` input
@@ -113,17 +192,17 @@ jobs:
                 v=substr($0, RSTART, RLENGTH); gsub(/[^0-9.]/, "", v); print v; instep=0
               }
             ' $wf
-            grep -hoE 'goreleaser/v2@v[0-9]+\.[0-9]+\.[0-9]+' justfile | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
+            grep -hoE 'goreleaser/v2@v[0-9]+\.[0-9]+\.[0-9]+' justfile scripts/reproducibility-diff.sh | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
           )
-          if [ "${#vers[@]}" -ne "$((steps + 1))" ]; then
-            echo "::error::found $steps goreleaser-action step(s) plus the justfile pin, but ${#vers[@]} version pin(s) (${vers[*]:-none}) — every goreleaser-action step must carry a quoted version: pin and the justfile go-run pin must be present"
+          if [ "${#vers[@]}" -ne "$((steps + 2))" ]; then
+            echo "::error::found $steps goreleaser-action step(s) plus the justfile/reproducibility pins, but ${#vers[@]} version pin(s) (${vers[*]:-none}) — every release entry point must carry the same pinned version"
             exit 1
           fi
           if [ "$(printf '%s\n' "${vers[@]}" | sort -u | wc -l)" -ne 1 ]; then
             echo "::error::goreleaser version pins disagree across ci.yml / release.yml / justfile: ${vers[*]}"
             exit 1
           fi
-          echo "goreleaser pinned consistently to ${vers[0]} across $steps goreleaser-action step(s) + justfile"
+          echo "goreleaser pinned consistently to ${vers[0]} across $steps goreleaser-action step(s) + justfile + reproducibility script"
       # The nfpms file_name_template is version-less specifically so the README's
       # releases/latest/download/ URLs resolve. Assert the coupling so a change to
       # either side fails CI instead of silently 404ing the install command (#138).
@@ -160,12 +239,12 @@ jobs:
   # here too.
   docs-links:
     name: docs-links (website link checker)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: website
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run sync:docs
@@ -181,28 +260,28 @@ jobs:
 
   goreleaser-snapshot:
     name: goreleaser-snapshot (cross-build matrix)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ env.GO_VERSION_FILE }}
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           # Pinned to match the publish job (release.yml) and `just ci` so the
           # config is validated by the exact goreleaser that ships it — the
           # version-parity guard in the lint job enforces this (issue #138).
-          version: "2.16.0"
+          version: "2.17.1"
           # Validate the ENTIRE .goreleaser.yaml first — including the
           # publish-phase scoop/chocolatey blocks the snapshot below skips — so a
           # schema/template typo fails CI in ~1s instead of mid-release at tag-cut
           # (and can't silently break the existing homebrew/deb/rpm path). Needs
           # no secrets or Windows.
           args: check
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
-          version: "2.16.0"
+          version: "2.17.1"
           # --skip publish already skips the (publish-phase) scoop/chocolatey
           # pipes; chocolatey AND sign are also named explicitly because their
           # steps shell out to CLIs this CI runner does not install — `choco`

@@ -42,12 +42,13 @@ fi
 # writable; docker we leave alone.
 build_image() {
     local engine="$1"
-    local build_args=()
+    # Keep the array non-empty: macOS ships Bash 3.2, where expanding an empty
+    # array under `set -u` raises "unbound variable".
+    local build_args=(build)
     if [[ "$engine" == "podman" ]]; then
         build_args+=(--build-arg "UID=$(id -u)" --build-arg "GID=$(id -g)")
     fi
-    "$engine" build \
-        "${build_args[@]}" \
+    "$engine" "${build_args[@]}" \
         -f "$ROOT/test/container/Containerfile" \
         -t "$IMAGE_NAME" \
         "$ROOT"
