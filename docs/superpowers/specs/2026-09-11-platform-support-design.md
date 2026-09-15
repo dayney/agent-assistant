@@ -29,9 +29,8 @@ The initial policy is:
 | CLI | Windows | amd64 | Windows 11 25H2 and later | supported |
 | CLI | Windows | amd64 | Windows 10 through Windows 11 24H2 | compatible |
 | CLI | Windows | arm64 | Windows 11 25H2 and later | preview |
-| Desktop | macOS | arm64, amd64 | macOS 14 and later | supported |
+| Desktop | macOS | arm64 (Apple Silicon) | macOS 14 and later | supported |
 | Desktop | Windows | amd64 | Windows 11 25H2 and later | supported |
-| Desktop | Windows | arm64 | Windows 11 25H2 and later | preview |
 
 `platform-support.json` is the canonical machine-readable form of this table.
 It also pins the toolchain versions used by CI and local builds. Human-facing
@@ -43,7 +42,6 @@ contract tests.
 Required pull-request jobs use explicit runner labels instead of `latest`:
 
 - macOS arm64: `macos-14`
-- macOS amd64: `macos-15-intel`
 - Windows amd64: `windows-2022`
 
 The existing Linux hermetic release gate remains the authoritative full CLI
@@ -51,7 +49,7 @@ test suite. Native macOS and Windows CLI jobs add a filesystem-isolated smoke
 workflow to the pure unit suite, because platform path and process behavior
 cannot be proven inside the Linux container.
 
-`latest` labels and Windows arm64 run in a separate scheduled canary workflow.
+`latest` labels and CLI Windows arm64 run in a separate scheduled canary workflow.
 Canaries expose ecosystem drift without silently changing the required support
 environment underneath a pull request.
 
@@ -80,9 +78,7 @@ triple and maps only these audited targets:
 | Rust target | Go target | Bundled filename |
 | --- | --- | --- |
 | `aarch64-apple-darwin` | `darwin/arm64` | `agent-assistant-core-aarch64-apple-darwin` |
-| `x86_64-apple-darwin` | `darwin/amd64` | `agent-assistant-core-x86_64-apple-darwin` |
 | `x86_64-pc-windows-msvc` | `windows/amd64` | `agent-assistant-core-x86_64-pc-windows-msvc.exe` |
-| `aarch64-pc-windows-msvc` | `windows/arm64` | `agent-assistant-core-aarch64-pc-windows-msvc.exe` |
 
 Unknown triples fail closed. The script may accept an explicit target for tests
 and cross-builds, but it never guesses an architecture.
@@ -125,7 +121,7 @@ disabled and is documented as such.
   required runners, Go/Node/Rust/GoReleaser pin drift, release target drift, and
   CI matrix drift.
 - Required native CLI and Desktop jobs cover every `supported` row.
-- Scheduled canaries cover `latest` macOS/Windows and Windows arm64 preview.
+- Scheduled canaries cover `latest` macOS/Windows and the CLI Windows arm64 preview.
 - Sidecar target mapping is unit tested, including `.exe` naming and rejection
   of unknown targets.
 - macOS and Windows Tauri configurations encode the documented package formats

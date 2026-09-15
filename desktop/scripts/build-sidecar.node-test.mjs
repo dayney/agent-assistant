@@ -12,24 +12,10 @@ const cases = [
     developmentFilename: 'agent-assistant-core',
   },
   {
-    rustTarget: 'x86_64-apple-darwin',
-    goos: 'darwin',
-    goarch: 'amd64',
-    filename: 'agent-assistant-core-x86_64-apple-darwin',
-    developmentFilename: 'agent-assistant-core',
-  },
-  {
     rustTarget: 'x86_64-pc-windows-msvc',
     goos: 'windows',
     goarch: 'amd64',
     filename: 'agent-assistant-core-x86_64-pc-windows-msvc.exe',
-    developmentFilename: 'agent-assistant-core.exe',
-  },
-  {
-    rustTarget: 'aarch64-pc-windows-msvc',
-    goos: 'windows',
-    goarch: 'arm64',
-    filename: 'agent-assistant-core-aarch64-pc-windows-msvc.exe',
     developmentFilename: 'agent-assistant-core.exe',
   },
 ];
@@ -47,11 +33,17 @@ test('rejects an unaudited target', () => {
   );
 });
 
+for (const rustTarget of ['x86_64-apple-darwin', 'aarch64-pc-windows-msvc']) {
+  test(`rejects unsupported Desktop target ${rustTarget}`, () => {
+    assert.throws(() => resolveTarget(rustTarget), new RegExp(`unsupported sidecar target ${rustTarget}`));
+  });
+}
+
 test('an explicit target wins over Tauri and host targets', () => {
   assert.equal(
     selectTargetTriple({
       argv: ['--target', 'x86_64-pc-windows-msvc'],
-      tauriTarget: 'aarch64-pc-windows-msvc',
+      tauriTarget: 'aarch64-apple-darwin',
       hostTarget: 'aarch64-apple-darwin',
     }),
     'x86_64-pc-windows-msvc',
@@ -62,10 +54,10 @@ test('Tauri target wins over the Rust host target', () => {
   assert.equal(
     selectTargetTriple({
       argv: [],
-      tauriTarget: 'x86_64-apple-darwin',
+      tauriTarget: 'x86_64-pc-windows-msvc',
       hostTarget: 'aarch64-apple-darwin',
     }),
-    'x86_64-apple-darwin',
+    'x86_64-pc-windows-msvc',
   );
 });
 

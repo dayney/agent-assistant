@@ -70,9 +70,7 @@ func TestPlatformPolicy(t *testing.T) {
 		"cli-windows-amd64-compat": {Product: "cli", OS: "windows", Arch: "amd64", MinimumVersion: "10", MaximumVersion: "11 24H2", Tier: "compatible", Cadence: "none"},
 		"cli-windows-arm64":        {Product: "cli", OS: "windows", Arch: "arm64", MinimumVersion: "11 25H2", Tier: "preview", Runner: "windows-11-arm", Cadence: "scheduled"},
 		"desktop-macos-arm64":      {Product: "desktop", OS: "darwin", Arch: "arm64", MinimumVersion: "14", Tier: "supported", Runner: "macos-14", Cadence: "required"},
-		"desktop-macos-amd64":      {Product: "desktop", OS: "darwin", Arch: "amd64", MinimumVersion: "14", Tier: "supported", Runner: "macos-15-intel", Cadence: "required"},
 		"desktop-windows-amd64":    {Product: "desktop", OS: "windows", Arch: "amd64", MinimumVersion: "11 25H2", Tier: "supported", Runner: "windows-2022", Cadence: "required"},
-		"desktop-windows-arm64":    {Product: "desktop", OS: "windows", Arch: "arm64", MinimumVersion: "11 25H2", Tier: "preview", Runner: "windows-11-arm", Cadence: "scheduled"},
 	}
 
 	if len(policy.Targets) != len(want) {
@@ -409,6 +407,16 @@ func TestPlatformDesktopReleaseIsFailClosed(t *testing.T) {
 	for _, forbidden := range []string{"continue-on-error: true", "signingIdentity\": \"-\"", "[[ ! \"$TAG\" =~"} {
 		if strings.Contains(desktopRelease, forbidden) {
 			t.Errorf("desktop-release.yml contains unsafe signing fallback %q", forbidden)
+		}
+	}
+	for _, required := range []string{"target: aarch64-apple-darwin", "target: x86_64-pc-windows-msvc"} {
+		if strings.Count(desktopRelease, required) != 1 {
+			t.Errorf("desktop-release.yml must contain exactly one supported target %q", required)
+		}
+	}
+	for _, forbidden := range []string{"target: x86_64-apple-darwin", "target: aarch64-pc-windows-msvc", "runner: macos-15-intel", "runner: windows-11-arm"} {
+		if strings.Contains(desktopRelease, forbidden) {
+			t.Errorf("desktop-release.yml contains unsupported Desktop target %q", forbidden)
 		}
 	}
 }

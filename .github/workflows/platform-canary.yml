@@ -44,11 +44,6 @@ jobs:
             arch: arm64
             tier: preview
             runner: windows-11-arm
-          - product: desktop
-            os: windows
-            arch: arm64
-            tier: preview
-            runner: windows-11-arm
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

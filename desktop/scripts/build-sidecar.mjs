@@ -5,9 +5,7 @@ import { spawnSync } from 'node:child_process';
 
 const sidecarTargets = new Map([
   ['aarch64-apple-darwin', { goos: 'darwin', goarch: 'arm64', extension: '' }],
-  ['x86_64-apple-darwin', { goos: 'darwin', goarch: 'amd64', extension: '' }],
   ['x86_64-pc-windows-msvc', { goos: 'windows', goarch: 'amd64', extension: '.exe' }],
-  ['aarch64-pc-windows-msvc', { goos: 'windows', goarch: 'arm64', extension: '.exe' }],
 ]);
 
 export function resolveTarget(rustTarget) {

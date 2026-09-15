@@ -8,13 +8,11 @@ source of truth on macOS and Windows.
 
 | Platform | Architecture | OS version range | Tier | Native bundle |
 | --- | --- | --- | --- | --- |
-| macOS | arm64, amd64 | 14+ | supported | application + DMG |
+| macOS | arm64 (Apple Silicon) | 14+ | supported | application + DMG |
 | Windows | amd64 | 11 25H2+ | supported | NSIS installer |
-| Windows | arm64 | 11 25H2+ | preview | NSIS installer |
 
-Supported targets are required native CI gates. Preview targets run scheduled
-canaries and may still have platform-specific gaps. The complete CLI and
-Desktop policy lives in [`../platform-support.json`](../platform-support.json).
+Supported targets are required native CI gates. The complete CLI and Desktop
+policy lives in [`../platform-support.json`](../platform-support.json).
 
 ## Prerequisites
 
@@ -40,9 +38,8 @@ build a native bundle:
 npm run tauri:build
 ```
 
-The sidecar resolver supports `aarch64-apple-darwin`,
-`x86_64-apple-darwin`, `x86_64-pc-windows-msvc`, and
-`aarch64-pc-windows-msvc`. Pass `--target <triple>` to
+The sidecar resolver supports `aarch64-apple-darwin` and
+`x86_64-pc-windows-msvc`. Pass `--target <triple>` to
 `npm run build:core:bundle --` only when cross-building in CI; unknown triples
 are rejected.
 

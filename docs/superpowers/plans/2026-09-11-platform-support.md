@@ -114,7 +114,8 @@ root.
 
 - [x] **Step 1: Update required CLI runners**
 
-Use explicit Linux, macOS arm64, macOS Intel, and Windows amd64 rows. Run both
+Use explicit Linux, macOS arm64, macOS Intel, and Windows amd64 rows for the
+CLI matrix. The desktop matrix uses macOS arm64 and Windows amd64 only. Run both
 the pure unit suite and native platform smoke on non-Linux supported rows.
 
 - [x] **Step 2: Add required Desktop native build rows**
@@ -124,7 +125,8 @@ sidecar, check Rust, and build the platform bundle.
 
 - [x] **Step 3: Add scheduled canaries**
 
-Exercise `macos-latest`, `windows-latest`, and `windows-11-arm`; keep their
+Exercise `macos-latest`, `windows-latest`, and the CLI-only `windows-11-arm`
+preview; keep their
 failures visible but outside the stable pull-request gate.
 
 - [x] **Step 4: Upgrade pinned Actions and GoReleaser together**

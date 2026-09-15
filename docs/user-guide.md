@@ -108,9 +108,8 @@ gaps.
 | CLI | Windows | amd64 | 11 25H2+ | supported |
 | CLI | Windows | amd64 | 10-11 24H2 | compatible |
 | CLI | Windows | arm64 | 11 25H2+ | preview |
-| Desktop | macOS | arm64, amd64 | 14+ | supported |
+| Desktop | macOS | arm64 (Apple Silicon) | 14+ | supported |
 | Desktop | Windows | amd64 | 11 25H2+ | supported |
-| Desktop | Windows | arm64 | 11 25H2+ | preview |
 
 The canonical policy, including CI runners and cadence, is
 [`platform-support.json`](../platform-support.json). Linux CLI packages remain

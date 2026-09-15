@@ -1350,8 +1350,9 @@ an observed native file has already been rendered or synchronized.
 
 The root `platform-support.json` is the machine-readable macOS/Windows contract
 for CLI and Desktop. Required CI uses explicit native runners for supported
-targets; floating `latest` and Windows ARM64 are scheduled canaries. Desktop
-release is separate from GoReleaser: it remains disabled until the repository
+targets; floating `latest` and CLI Windows ARM64 are scheduled canaries. Desktop
+release targets Apple Silicon macOS and Windows x64 only and is separate from GoReleaser:
+it remains disabled until the repository
 sets `DESKTOP_RELEASE_ENABLED=true`, and then fails in preflight unless all
 Apple signing/notarization and Windows Authenticode credentials are present.
 Only verified DMG and NSIS artifacts are uploaded. The GitHub release retains

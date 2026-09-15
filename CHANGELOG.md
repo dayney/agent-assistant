@@ -14,11 +14,12 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 - **macOS and Windows support is now an explicit, tested contract.** CLI and
   Desktop targets, minimum OS versions, architectures, support tiers, native CI
   runners, and pinned Go/Node/Rust/GoReleaser versions live in
-  `platform-support.json`. Required jobs use fixed runners; floating macOS,
-  Windows, and Windows ARM64 coverage is isolated to scheduled canaries.
+  `platform-support.json`. Required jobs use fixed runners; floating macOS and
+  Windows coverage, plus the CLI Windows ARM64 preview, is isolated to scheduled
+  canaries.
 - **Desktop now builds its Go Core sidecar portably and launches it through
-  Tauri's declared sidecar API.** The same build command supports Apple Silicon,
-  Intel Mac, Windows x64, and Windows ARM64, including the `.exe` naming rule;
+  Tauri's declared sidecar API.** The supported release targets are Apple
+  Silicon and Windows x64, including the `.exe` naming rule;
   release builds ignore the development binary override and packaged mode no
   longer searches sibling directories or `PATH`. Desktop health checks now
   start and query the sidecar instead of treating command construction as proof
@@ -64,8 +65,9 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
 ### Added
 
 - **Windows Desktop packaging and fail-closed signed releases.** Desktop builds
-  now produce macOS app/DMG and Windows NSIS bundles. Public Desktop publishing
-  is separately gated behind `DESKTOP_RELEASE_ENABLED`; when enabled it requires
+  now produce an Apple Silicon macOS app/DMG and a Windows x64 NSIS bundle.
+  Public Desktop publishing is separately gated behind
+  `DESKTOP_RELEASE_ENABLED`; when enabled it requires
   Apple signing/notarization and Windows Authenticode credentials and verifies
   every artifact before upload. Prerelease/build tag metadata remains on the
   GitHub release while native package versions use the numeric `X.Y.Z` core.
