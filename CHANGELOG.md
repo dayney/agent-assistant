@@ -28,6 +28,10 @@ source layout, CLI surface, and state schema are stabilizing but may still chang
   absent, agentsync falls back to `USERPROFILE`, so Explorer-launched CLI and
   Desktop processes resolve canonical and destination paths under the user's
   real profile instead of a relative working directory.
+- **Windows status/diff no longer report false permission drift.** Go exposes
+  Windows file permissions through the read-only attribute, so drift checks now
+  compare the effective writable state there while retaining full permission
+  checks on macOS and other POSIX systems.
 
 - **`--lossless` now says what its check did not consider.** The lossiness probe
   renders every enabled agent from a canonical carrying no plugin provenance, so

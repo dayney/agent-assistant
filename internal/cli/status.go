@@ -1019,7 +1019,7 @@ func modeDrifted(recordedMode uint32, path string) bool {
 	if err != nil || fi.Mode()&os.ModeSymlink != 0 || !fi.Mode().IsRegular() {
 		return false
 	}
-	return fi.Mode().Perm() != os.FileMode(recordedMode).Perm()
+	return modePermsDiffer(os.FileMode(recordedMode), fi.Mode())
 }
 
 func hashAnyValue(v any) string {

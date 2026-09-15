@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -18,6 +19,29 @@ func TestStatusDiff_ModeDriftDetection(t *testing.T) {
 	p := filepath.Join(dir, "run.sh")
 	if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
+	}
+
+	if runtime.GOOS == "windows" {
+		// Windows exposes only the read-only attribute through Go's permission
+		// bits, so a writable file may report 0666 for any requested mode that
+		// includes a write bit. The helpers compare that effective capability.
+		if modeDrifted(0o644, p) {
+			t.Errorf("modeDrifted: writable Windows file must not drift from 0644")
+		}
+		if err := os.Chmod(p, 0o444); err != nil {
+			t.Fatal(err)
+		}
+		if !modeDrifted(0o644, p) {
+			t.Errorf("modeDrifted: read-only Windows file must drift from writable 0644")
+		}
+		src, dst, ok := modeHunk(p, 0o644)
+		if !ok || src != "mode 0644" || dst != "mode 0444" {
+			t.Errorf("modeHunk on Windows = %q / %q / %v, want 0644 / 0444 / true", src, dst, ok)
+		}
+		if _, _, ok := modeHunk(p, 0o444); ok {
+			t.Errorf("modeHunk: no hunk expected when Windows read-only state matches")
+		}
+		return
 	}
 
 	// modeDrifted (status side).

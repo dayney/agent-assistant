@@ -291,7 +291,7 @@ func modeHunk(path string, wantMode uint32) (source, dest string, ok bool) {
 	}
 	want := os.FileMode(wantMode).Perm()
 	got := fi.Mode().Perm()
-	if want == got {
+	if !modePermsDiffer(want, got) {
 		return "", "", false
 	}
 	return fmt.Sprintf("mode %04o", want), fmt.Sprintf("mode %04o", got), true
