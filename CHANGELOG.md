@@ -17,6 +17,7 @@
 
 ### 修复
 
+- **本地 macOS 应用图标正确打包** — Tauri bundle 配置现在显式包含 macOS `.icns` 和跨平台 PNG/ICO 图标，避免本地 `.app` 显示默认占位图标。
 - **Windows Desktop Core 写入与路径输出跨平台兼容** — 原子替换会先关闭临时文件句柄，快照逻辑路径统一使用 `/`，golden fixture 在 CI 中固定使用 LF 换行。
 - **自动更新绑定当前 GitHub 仓库** — 更新检查地址与 `latest.json` 资产地址改为使用 `dayney/agent-assistant`，CI 会从 `GITHUB_REPOSITORY` 派生地址，避免继续访问迁移前的仓库。
 
