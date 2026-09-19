@@ -1,0 +1,70 @@
+# git-cliff 配置文件
+# 文档: https://git-cliff.org/docs/configuration
+
+[changelog]
+header = """
+# Changelog
+
+本项目所有值得记录的变更都在这里。
+
+格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，
+版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
+
+> **关于版本号的说明**
+> `v0.15.0` 及以后是 **Desktop 应用**阶段（Tauri + Rust Core + React）。
+> `v0.1.0` ~ `v0.14.0` 是**早期 CLI 工具**阶段（Go）。
+
+"""
+
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] — {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+
+{% for commit in commits %}\
+- **{{ commit.message | upper_first | split(pat=":") | last | trim | replace(from="🐛 ", to="") | replace(from="✨ ", to="") | replace(from="💄 ", to="") | replace(from="🔨 ", to="") | replace(from="🚀 ", to="") | replace(from="🎉 ", to="") | trim }}**{% if commit.breaking %} ⚠️{% endif %}
+{% endfor %}
+{% endfor %}
+"""
+
+trim = true
+
+footer = """
+---
+*通过 [GitHub Releases](https://github.com/spxrogers/agentsync/releases) 查看完整发布历史。*
+"""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+
+commit_preprocessors = [
+  # 将 scope 前缀中的 emoji 去掉，规范化 commit message
+  { pattern = "^(feat|fix|chore|docs|style|refactor|test|ci|build|perf)(\\([^)]+\\))?(!?): [🐛✨💄🔨🚀🎉⚡🔥🩹📝♻️🧪🔒🏗️⬆️⬇️]\\s*", replace = "${1}${2}${3}: " },
+]
+
+commit_parsers = [
+  { message = "^feat.*!:", group = "重大变更" },
+  { body = ".*BREAKING CHANGE.*", group = "重大变更" },
+  { message = "^feat", group = "新增" },
+  { message = "^fix", group = "修复" },
+  { message = "^refactor", group = "重构" },
+  { message = "^perf", group = "性能优化" },
+  { message = "^chore", skip = true },
+  { message = "^docs", skip = true },
+  { message = "^style", skip = true },
+  { message = "^test", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^build", skip = true },
+]
+
+protect_breaking_commits = true
+filter_commits = true
+tag_pattern = "v[0-9]*\\.[0-9]*\\.[0-9]*"
+sort_commits = "oldest"
+topo_order = false

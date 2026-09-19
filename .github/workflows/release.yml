@@ -1,0 +1,118 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Stable Desktop version (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: Desktop CI gate
+    uses: ./.github/workflows/ci.yml
+
+  resolve-tag:
+    name: Resolve stable release tag
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Create release tag for a manual run
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          scripts/release-tag.sh "$VERSION"
+      - name: Select and validate tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          PUSH_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$DISPATCH_VERSION"
+          else
+            tag="$PUSH_TAG"
+          fi
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Desktop releases require a stable vX.Y.Z tag"
+            exit 1
+          fi
+          echo "value=$tag" >> "$GITHUB_OUTPUT"
+
+  update-changelog:
+    name: Update CHANGELOG.md
+    needs: resolve-tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install deps (includes git-cliff)
+        run: npm ci
+        working-directory: desktop
+      - name: Prepend release section to CHANGELOG.md
+        env:
+          TAG: ${{ needs.resolve-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          npx git-cliff --latest --config cliff.toml --tag "$TAG" --prepend CHANGELOG.md
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md 无变化，跳过提交"
+            exit 0
+          fi
+          git add CHANGELOG.md
+          git commit -m "chore(release): update CHANGELOG for $TAG [skip ci]"
+          git push origin HEAD:main
+        working-directory: desktop/../
+
+  desktop-release:
+    name: Signed Desktop release
+    # changelog 更新完成后再发布，确保 Release Notes 与 CHANGELOG 一致
+    needs: [resolve-tag, update-changelog]
+    if: vars.DESKTOP_RELEASE_ENABLED == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      tag: ${{ needs.resolve-tag.outputs.tag }}
+    secrets: inherit
+
+  desktop-release-disabled:
+    name: Desktop distribution disabled
+    needs: [resolve-tag, update-changelog]
+    if: vars.DESKTOP_RELEASE_ENABLED != 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "::notice::Set DESKTOP_RELEASE_ENABLED=true after every signing credential is provisioned."

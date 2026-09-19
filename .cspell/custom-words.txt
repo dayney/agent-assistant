@@ -1,0 +1,9 @@
+agentsync
+antigravity
+anysphere
+shadcn
+spxrogers
+supabase
+tauri
+vite
+zustand

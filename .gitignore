@@ -1,0 +1,27 @@
+/bin/
+/dist/
+/agentsync
+/agentsync.exe
+/coverage.out
+/coverage.html
+/desktop/node_modules/
+/desktop/dist/
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/
+/desktop/src-tauri/agent-assistant-core
+/desktop/src-tauri/binaries/
+/.playwright-mcp/
+/output/
+/tmp/
+/.playwright-cli/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Transient per-agent git worktrees created by background workflow orchestration.
+# These are isolated checkouts managed (and cleaned up) by the harness — never
+# commit them.
+/.claude/worktrees/
+
+/docs

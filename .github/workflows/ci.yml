@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_call:
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    steps:
+      - name: Keep golden fixtures in LF format
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install Desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Test Desktop frontend and release tools
+        working-directory: desktop
+        run: npm test
+      - name: Build Desktop frontend
+        working-directory: desktop
+        run: npm run build
+      - name: Test embedded Rust core
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --check
+      - name: Reject Rust warnings
+        run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  release-contract:
+    name: Desktop release contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26.8.1
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Install Desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Verify release scripts and Desktop-only boundary
+        working-directory: desktop
+        run: npm test
+      - name: Verify stable Desktop release tags
+        run: ./scripts/release-tag.sh --self-test
