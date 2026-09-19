@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
@@ -59,4 +60,14 @@ test("active automation has no CLI or documentation-site delivery path", () => {
       assert.doesNotMatch(content, reference, `${path} still references ${reference}`);
     }
   }
+});
+
+test("Desktop lockfile is tracked for reproducible CI installs", () => {
+  assert.doesNotThrow(() =>
+    execFileSync(
+      "git",
+      ["ls-files", "--error-unmatch", "desktop/package-lock.json"],
+      { cwd: repositoryRoot, stdio: "pipe" },
+    ),
+  );
 });
