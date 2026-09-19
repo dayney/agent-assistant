@@ -7,7 +7,15 @@ on:
         description: Stable Git tag used to create and publish the Desktop release
         required: true
         type: string
+      signing_mode:
+        description: updater-only or platform-signed
+        required: true
+        type: string
     secrets:
+      TAURI_SIGNING_PRIVATE_KEY:
+        required: false
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
+        required: false
       APPLE_CERTIFICATE:
         required: false
       APPLE_CERTIFICATE_PASSWORD:
@@ -28,30 +36,32 @@ on:
         required: false
       WINDOWS_TIMESTAMP_URL:
         required: false
-      TAURI_UPDATER_PUBLIC_KEY:
-        required: false
-      TAURI_SIGNING_PRIVATE_KEY:
-        required: false
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
-        required: false
 
 permissions:
   contents: write
 
 jobs:
   preflight:
-    name: signing credential preflight
+    name: release policy and Draft preflight
     runs-on: ubuntu-24.04
     outputs:
-      version: ${{ steps.validate.outputs.version }}
+      version: ${{ steps.policy.outputs.version }}
+      macos_signing: ${{ steps.policy.outputs.macos_signing }}
+      windows_signing: ${{ steps.policy.outputs.windows_signing }}
     steps:
       - uses: actions/checkout@v7
-      - name: Require a stable tag and every signing credential
-        id: validate
-        shell: bash
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+      - name: Evaluate release policy
+        id: policy
         env:
-          TAG: ${{ inputs.tag }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          DESKTOP_SIGNING_MODE: ${{ inputs.signing_mode }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -62,60 +72,56 @@ jobs:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
-          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node desktop/scripts/release-preflight.mjs
+      - name: Create or resume Draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-            echo "::error::Desktop auto-update requires a stable vX.Y.Z release tag"
-            exit 1
-          fi
-          version="${TAG#v}"
-          missing=()
-          for name in \
-            APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
-            APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID KEYCHAIN_PASSWORD \
-            WINDOWS_CERTIFICATE WINDOWS_CERTIFICATE_PASSWORD WINDOWS_TIMESTAMP_URL \
-            TAURI_UPDATER_PUBLIC_KEY TAURI_SIGNING_PRIVATE_KEY \
-            TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-          do
-            value="${!name:-}"
-            if [[ -z "${value//[[:space:]]/}" ]]; then
-              missing+=("$name")
-            fi
-          done
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error::Desktop release credentials are missing: ${missing[*]}"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
+          release_state=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [[ -z "$release_state" ]]; then
             gh release create "$TAG" --draft --verify-tag --generate-notes --title "agent-assistant $TAG"
+          elif [[ "$release_state" != "true" ]]; then
+            echo "::error::Release $TAG is already published; published tags are immutable"
+            exit 1
+          else
+            echo "::notice::Resuming existing Draft release $TAG"
           fi
 
   macos:
-    name: signed macOS (arm64)
+    name: macOS package (arm64, ${{ needs.preflight.outputs.macos_signing }})
     needs: preflight
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin
       - uses: actions/setup-node@v7
         with:
-          node-version: 26.8.1
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - name: Install Desktop dependencies
         working-directory: desktop
         run: npm ci
-      - name: Import Apple Developer certificate
+      - name: Configure ad-hoc application signing
+        if: needs.preflight.outputs.macos_signing == 'adhoc'
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
+        run: echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+      - name: Import Apple Developer ID certificate
+        if: needs.preflight.outputs.macos_signing == 'developer-id'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
@@ -129,30 +135,49 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
           security list-keychains -d user -s "$keychain"
           security find-identity -v -p codesigning "$keychain" | grep -F "$APPLE_SIGNING_IDENTITY"
-      - name: Prepare signed updater config
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+          echo "APPLE_PASSWORD=$APPLE_PASSWORD" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          rm -f "$certificate"
+      - name: Prepare updater config
         id: config
         working-directory: desktop
         env:
           DESKTOP_VERSION: ${{ needs.preflight.outputs.version }}
-          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
         run: |
           config="$RUNNER_TEMP/desktop-release.json"
           node scripts/write-updater-config.mjs "$config"
           echo "path=$config" >> "$GITHUB_OUTPUT"
-      - name: Build signed and notarized Desktop bundle
+      - name: Build macOS installer and updater archive
         working-directory: desktop
         env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           AGENT_ASSISTANT_UPDATER_ENABLED: "true"
           VITE_UPDATER_ENABLED: "true"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --target aarch64-apple-darwin --bundles app,dmg --config "${{ steps.config.outputs.path }}"
+      - name: Verify macOS installer and updater signature
         run: |
-          npm run tauri -- build --target aarch64-apple-darwin --bundles dmg --config "${{ steps.config.outputs.path }}"
-      - name: Verify application and updater signatures
+          set -euo pipefail
+          app=$(find desktop/src-tauri/target -type d -path '*/bundle/macos/*.app' -print -quit)
+          dmg=$(find desktop/src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)
+          updater=$(find desktop/src-tauri/target -type f -path '*/bundle/macos/*.app.tar.gz' -print -quit)
+          test -n "$app" && test -n "$dmg" && test -n "$updater"
+          test -s "$dmg" && test -s "$updater" && test -s "$updater.sig"
+          if find "$app" -name 'agent-assistant-core*' -print -quit | grep -q .; then
+            echo "::error::Desktop bundle still contains the removed Go sidecar"
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$app"
+      - name: Verify ad-hoc macOS signature
+        if: needs.preflight.outputs.macos_signing == 'adhoc'
+        run: |
+          set -euo pipefail
+          app=$(find desktop/src-tauri/target -type d -path '*/bundle/macos/*.app' -print -quit)
+          codesign --display --verbose=4 "$app" 2>&1 | grep -F 'Signature=adhoc'
+      - name: Verify and notarize Developer ID package
+        if: needs.preflight.outputs.macos_signing == 'developer-id'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -161,13 +186,7 @@ jobs:
           set -euo pipefail
           app=$(find desktop/src-tauri/target -type d -path '*/bundle/macos/*.app' -print -quit)
           dmg=$(find desktop/src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)
-          updater=$(find desktop/src-tauri/target -type f -path '*/bundle/macos/*.app.tar.gz' -print -quit)
-          test -n "$app" && test -n "$dmg" && test -n "$updater" && test -f "$updater.sig"
-          if find "$app" -name 'agent-assistant-core*' -print -quit | grep -q .; then
-            echo "::error::Desktop bundle still contains the removed Go sidecar"
-            exit 1
-          fi
-          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --display --verbose=4 "$app" 2>&1 | grep -F 'Authority=Developer ID Application'
           spctl --assess --type execute --verbose=2 "$app"
           xcrun notarytool submit "$dmg" \
             --apple-id "$APPLE_ID" \
@@ -186,36 +205,46 @@ jobs:
             desktop/src-tauri/target/**/bundle/macos/*.app.tar.gz
             desktop/src-tauri/target/**/bundle/macos/*.app.tar.gz.sig
       - name: Remove temporary signing keychain
-        if: always()
+        if: always() && needs.preflight.outputs.macos_signing == 'developer-id'
         run: security delete-keychain "$RUNNER_TEMP/desktop-signing.keychain-db" || true
 
   windows:
-    name: signed Windows (x64)
+    name: Windows package (x64, ${{ needs.preflight.outputs.windows_signing }})
     needs: preflight
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
       - uses: actions/setup-node@v7
         with:
-          node-version: 26.8.1
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - name: Install Desktop dependencies
         working-directory: desktop
         run: npm ci
-      - name: Import Windows certificate and prepare updater config
+      - name: Prepare updater config
         id: config
         shell: pwsh
         working-directory: desktop
         env:
+          DESKTOP_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          $configPath = Join-Path $env:RUNNER_TEMP 'desktop-release.json'
+          node scripts/write-updater-config.mjs $configPath
+          "path=$configPath" >> $env:GITHUB_OUTPUT
+      - name: Import Authenticode certificate and extend bundle config
+        if: needs.preflight.outputs.windows_signing == 'authenticode'
+        shell: pwsh
+        env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
-          DESKTOP_VERSION: ${{ needs.preflight.outputs.version }}
-          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          CONFIG_PATH: ${{ steps.config.outputs.path }}
         run: |
           $certificatePath = Join-Path $env:RUNNER_TEMP 'desktop-certificate.pfx'
           [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
@@ -224,18 +253,16 @@ jobs:
           if (-not $certificate -or -not $certificate.HasPrivateKey) {
             throw 'Imported Windows signing certificate has no private key'
           }
-          $configPath = Join-Path $env:RUNNER_TEMP 'desktop-release.json'
-          node scripts/write-updater-config.mjs $configPath
-          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $config = Get-Content $env:CONFIG_PATH -Raw | ConvertFrom-Json
           $windows = [PSCustomObject]@{
             certificateThumbprint = $certificate.Thumbprint
             digestAlgorithm = 'sha256'
             timestampUrl = $env:WINDOWS_TIMESTAMP_URL
           }
-          $config.bundle | Add-Member -NotePropertyName windows -NotePropertyValue $windows
-          $config | ConvertTo-Json -Depth 10 | Set-Content -Path $configPath -Encoding utf8NoBOM
-          "path=$configPath" >> $env:GITHUB_OUTPUT
-      - name: Build signed NSIS bundle
+          $config.bundle | Add-Member -NotePropertyName windows -NotePropertyValue $windows -Force
+          $config | ConvertTo-Json -Depth 10 | Set-Content -Path $env:CONFIG_PATH -Encoding utf8NoBOM
+          Remove-Item $certificatePath -Force
+      - name: Build Windows installer and updater artifact
         shell: pwsh
         working-directory: desktop
         env:
@@ -243,18 +270,25 @@ jobs:
           VITE_UPDATER_ENABLED: "true"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --config "${{ steps.config.outputs.path }}"
-      - name: Verify Authenticode and updater signatures
+        run: npm run tauri -- build --target x86_64-pc-windows-msvc --bundles nsis --config "${{ steps.config.outputs.path }}"
+      - name: Verify Windows installer and updater signature
         shell: pwsh
         run: |
-          $installer = Get-ChildItem desktop/src-tauri/target -Recurse -File -Filter '*setup.exe' | Select-Object -First 1
-          $updater = Get-ChildItem desktop/src-tauri/target -Recurse -File -Filter '*.nsis.zip' | Select-Object -First 1
-          if (-not $installer -or -not $updater -or -not (Test-Path "$($updater.FullName).sig")) {
-            throw 'Signed Windows installer or updater artifact was not produced'
+          $installer = Get-ChildItem desktop/src-tauri/target -Recurse -File -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $installer -or $installer.Length -eq 0) {
+            throw 'Windows installer was not produced'
+          }
+          $updaterSignature = Get-Item "$($installer.FullName).sig" -ErrorAction SilentlyContinue
+          if (-not $updaterSignature -or $updaterSignature.Length -eq 0) {
+            throw 'Windows updater signature was not produced'
           }
           $sidecar = Get-ChildItem desktop/src-tauri/target -Recurse -File -Filter 'agent-assistant-core*' | Select-Object -First 1
           if ($sidecar) { throw "Desktop build still contains the removed Go sidecar: $($sidecar.FullName)" }
+      - name: Verify Windows Authenticode signature
+        if: needs.preflight.outputs.windows_signing == 'authenticode'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target -Recurse -File -Filter '*-setup.exe' | Select-Object -First 1
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
           if (-not $signtool) { throw 'signtool.exe was not found' }
           & $signtool.FullName verify /pa /all /v $installer.FullName
@@ -265,25 +299,26 @@ jobs:
           name: desktop-windows-assets
           if-no-files-found: error
           path: |
-            desktop/src-tauri/target/**/bundle/nsis/*setup.exe
-            desktop/src-tauri/target/**/bundle/nsis/*.nsis.zip
-            desktop/src-tauri/target/**/bundle/nsis/*.nsis.zip.sig
+            desktop/src-tauri/target/**/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/**/bundle/nsis/*-setup.exe.sig
 
   publish-manifest:
-    name: publish complete updater manifest
+    name: publish complete updater release
     needs: [preflight, macos, windows]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-node@v7
         with:
-          node-version: 26.8.1
+          node-version-file: .node-version
       - uses: actions/download-artifact@v8
         with:
           pattern: desktop-*-assets
           path: ${{ runner.temp }}/desktop-assets
           merge-multiple: true
-      - name: Build latest.json from signed artifacts
+      - name: Build latest.json and checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
@@ -295,21 +330,78 @@ jobs:
           gh release view "$RELEASE_TAG" --json body --jq .body > "$RELEASE_NOTES_FILE"
           node desktop/scripts/create-updater-manifest.mjs "$RUNNER_TEMP/latest.json"
           node -e 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))' "$RUNNER_TEMP/latest.json"
-      - name: Upload signed Desktop assets
+          checksum_file="$RUNNER_TEMP/SHA256SUMS.txt"
+          : > "$checksum_file"
+          while IFS= read -r -d '' asset; do
+            digest=$(sha256sum "$asset" | cut -d ' ' -f 1)
+            printf '%s  %s\n' "$digest" "$(basename "$asset")" >> "$checksum_file"
+          done < <(find "$UPDATER_ARTIFACT_ROOT" -type f -print0 | sort -z)
+          test -s "$checksum_file"
+          mv "$checksum_file" "$UPDATER_ARTIFACT_ROOT/SHA256SUMS.txt"
+      - name: Upload Desktop release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
+          ASSET_ROOT: ${{ runner.temp }}/desktop-assets
         run: |
           set -euo pipefail
-          find "$RUNNER_TEMP/desktop-assets" -type f -print0 \
-            | xargs -0 gh release upload "$RELEASE_TAG" --clobber
-      - name: Publish latest.json after every referenced asset exists
+          while IFS= read -r asset; do
+            gh release delete-asset "$RELEASE_TAG" "$asset" --yes
+          done < <(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          mapfile -d '' assets < <(find "$ASSET_ROOT" -type f -print0 | sort -z)
+          if (( ${#assets[@]} == 0 )); then
+            echo "::error::No Desktop release assets were collected"
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+      - name: Publish latest.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/latest.json" --clobber
+      - name: Verify Draft release asset inventory
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          ASSET_ROOT: ${{ runner.temp }}/desktop-assets
+        run: |
+          set -euo pipefail
+          if [[ $(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft) != "true" ]]; then
+            echo "::error::Release $RELEASE_TAG stopped being a Draft before verification"
+            exit 1
+          fi
+          expected="$RUNNER_TEMP/expected-assets.txt"
+          actual="$RUNNER_TEMP/actual-assets.txt"
+          {
+            find "$ASSET_ROOT" -type f -printf '%f\n'
+            basename "$RUNNER_TEMP/latest.json"
+          } | sort > "$expected"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | sort > "$actual"
+          diff -u "$expected" "$actual"
       - name: Publish complete GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: gh release edit "$RELEASE_TAG" --draft=false --latest
+      - name: Verify public updater manifest
+        env:
+          EXPECTED_VERSION: ${{ needs.preflight.outputs.version }}
+          MANIFEST_URL: https://github.com/${{ github.repository }}/releases/latest/download/latest.json
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsSL "$MANIFEST_URL?run=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$attempt" -o "$RUNNER_TEMP/public-latest.json" \
+              && node -e '
+                const manifest = require(process.argv[1]);
+                const expected = process.env.EXPECTED_VERSION;
+                if (manifest.version !== expected) process.exit(1);
+                for (const platform of ["darwin-aarch64", "windows-x86_64"]) {
+                  if (!manifest.platforms?.[platform]?.url || !manifest.platforms[platform].signature) process.exit(1);
+                }
+              ' "$RUNNER_TEMP/public-latest.json"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Public updater manifest did not converge to $EXPECTED_VERSION"
+          exit 1

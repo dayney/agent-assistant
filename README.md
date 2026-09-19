@@ -70,27 +70,33 @@ the real `~/.agentsync/` tree.
 
 ## Automatic updates
 
-Signed production builds check the stable GitHub release channel at startup.
+Updater-enabled release builds check the stable GitHub release channel at startup.
 Users can also choose **Check for Updates...** from the native menu or the
 version entry in the sidebar. An available update shows its version, notes, and
 download progress; installation requires confirmation and is blocked while the
 Rule workbench has unsaved edits.
 
-The release workflow builds macOS ARM64 and Windows x64 independently, verifies
-that both signed updater archives and signatures exist, uploads all referenced
-assets, and publishes `latest.json` last. It then publishes the completed draft
-GitHub Release. Apple notarization, Windows Authenticode, and the Tauri updater
-signature are separate trust checks.
+The release workflow creates a Draft GitHub Release, builds macOS ARM64 and
+Windows x64 independently, verifies both updater signatures, generates
+`SHA256SUMS.txt`, and checks the complete asset inventory before publishing the
+Release as stable `latest`. A failed run remains a Draft and is never exposed as
+the update channel.
 
 Updater endpoints and artifact URLs are derived from the workflow's
 `GITHUB_REPOSITORY` value. Local release-tool execution defaults to
 `dayney/agent-assistant`, so production builds always check this repository's
 stable `latest` release instead of the repository the project was migrated from.
 
-Desktop publishing is enabled only when the repository variable
-`DESKTOP_RELEASE_ENABLED` is `true` and every signing secret listed in
-[`desktop/README.md`](desktop/README.md) is provisioned. Releases accept stable
-tags only:
+Tauri updater signing is mandatory. The public key is versioned at
+`desktop/src-tauri/updater.pubkey`; only its private key and password are GitHub
+Secrets. The default `updater-only` mode produces a macOS ad-hoc signed package
+and an unsigned Windows installer, so first-time users should expect Gatekeeper
+or SmartScreen warnings. Setting `DESKTOP_SIGNING_MODE=platform-signed` enables
+Apple Developer ID/notarization and Windows Authenticode, and fails closed if
+any platform credential is missing. See [`desktop/README.md`](desktop/README.md)
+for setup and recovery instructions.
+
+Releases accept stable tags only:
 
 ```bash
 just release v0.1.0

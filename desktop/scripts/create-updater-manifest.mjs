@@ -53,7 +53,7 @@ export function createUpdaterManifest({
 
 function platformForAsset(assetName) {
   if (assetName.endsWith(".app.tar.gz")) return "darwin-aarch64";
-  if (assetName.endsWith(".nsis.zip")) return "windows-x86_64";
+  if (assetName.endsWith("-setup.exe")) return "windows-x86_64";
   return null;
 }
 

@@ -143,14 +143,43 @@ release-tool execution defaults to `dayney/agent-assistant`.
 ## Release trust and credentials
 
 `.github/workflows/desktop-release.yml` builds macOS ARM64 and Windows x64 in
-separate signed jobs. A final job publishes installers and updater packages,
-then publishes `latest.json` last. The workflow is enabled by the repository
-variable `DESKTOP_RELEASE_ENABLED=true` and fails before building if any of the
-following GitHub Actions secrets is missing:
+separate jobs. Every release requires Tauri updater signatures; Apple Developer
+ID/notarization and Windows Authenticode are independent platform trust layers.
+The final job uploads installers, updater signatures, and `SHA256SUMS.txt`, then
+uploads `latest.json`, verifies the exact Draft asset inventory, and only then
+publishes the Release as stable `latest`.
 
-- `TAURI_UPDATER_PUBLIC_KEY`
+The default release mode is `updater-only`. It requires these GitHub Actions
+secrets:
+
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+The updater public key is tracked at `src-tauri/updater.pubkey`, so the trust
+root embedded by any tag is auditable. Generate a password-protected key pair
+from `desktop/` without putting the password on the command line:
+
+```bash
+./node_modules/.bin/tauri signer generate --write-keys "$HOME/.tauri/agent-assistant.key"
+gh secret set TAURI_SIGNING_PRIVATE_KEY < "$HOME/.tauri/agent-assistant.key"
+gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+```
+
+Commit only the generated `.pub` value as `src-tauri/updater.pubkey`. Keep the
+private key in secure offline storage as well as GitHub Actions: losing it means
+already installed clients cannot trust future updates. Never commit the private
+key or its password.
+
+`updater-only` uses ad-hoc signing on macOS and leaves the Windows installer
+without Authenticode. The GitHub download and later updater packages remain
+available, but the first installation can show macOS Gatekeeper or Windows
+SmartScreen unknown-publisher warnings. The Tauri updater signature authenticates
+subsequent updates; it does not give the initial installer an Apple or Microsoft
+publisher identity.
+
+Set the repository variable `DESKTOP_SIGNING_MODE=platform-signed` only after
+all of these additional secrets are provisioned:
+
 - `APPLE_CERTIFICATE`
 - `APPLE_CERTIFICATE_PASSWORD`
 - `APPLE_SIGNING_IDENTITY`
@@ -162,7 +191,11 @@ following GitHub Actions secrets is missing:
 - `WINDOWS_CERTIFICATE_PASSWORD`
 - `WINDOWS_TIMESTAMP_URL`
 
-The updater public key is injected into a temporary Tauri release override. The
-private updater key is available only to the build jobs. Neither key is replaced
-with a placeholder, and local builds without release credentials do not become
-trusted update publishers.
+The policy preflight rejects partial platform credentials rather than silently
+downgrading. A failed build keeps its GitHub Release in Draft form and the same
+workflow run can be retried. Once published, that tag and Release are immutable;
+fixes use a new version tag. The release workflow never writes generated
+changelog content back to `main`, so `CHANGELOG.md` must be ready before tagging.
+
+Local, demo, and ordinary unsigned builds do not register the updater and never
+become trusted update publishers.

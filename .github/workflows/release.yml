@@ -61,58 +61,14 @@ jobs:
           fi
           echo "value=$tag" >> "$GITHUB_OUTPUT"
 
-  update-changelog:
-    name: Update CHANGELOG.md
-    needs: resolve-tag
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26.8.1
-          cache: npm
-          cache-dependency-path: desktop/package-lock.json
-      - name: Install deps (includes git-cliff)
-        run: npm ci
-        working-directory: desktop
-      - name: Prepend release section to CHANGELOG.md
-        env:
-          TAG: ${{ needs.resolve-tag.outputs.tag }}
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          npx git-cliff --latest --config cliff.toml --tag "$TAG" --prepend CHANGELOG.md
-          if git diff --quiet CHANGELOG.md; then
-            echo "CHANGELOG.md 无变化，跳过提交"
-            exit 0
-          fi
-          git add CHANGELOG.md
-          git commit -m "chore(release): update CHANGELOG for $TAG [skip ci]"
-          git push origin HEAD:main
-        working-directory: desktop/../
-
   desktop-release:
-    name: Signed Desktop release
-    # changelog 更新完成后再发布，确保 Release Notes 与 CHANGELOG 一致
-    needs: [resolve-tag, update-changelog]
-    if: vars.DESKTOP_RELEASE_ENABLED == 'true'
+    name: Desktop release
+    needs: [resolve-tag]
+    if: github.event_name == 'push'
     permissions:
       contents: write
     uses: ./.github/workflows/desktop-release.yml
     with:
       tag: ${{ needs.resolve-tag.outputs.tag }}
+      signing_mode: ${{ vars.DESKTOP_SIGNING_MODE || 'updater-only' }}
     secrets: inherit
-
-  desktop-release-disabled:
-    name: Desktop distribution disabled
-    needs: [resolve-tag, update-changelog]
-    if: vars.DESKTOP_RELEASE_ENABLED != 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - run: echo "::notice::Set DESKTOP_RELEASE_ENABLED=true after every signing credential is provisioned."

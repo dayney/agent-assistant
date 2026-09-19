@@ -51,12 +51,26 @@ the release updater configuration. Browser demo mode, development mode, and
 unsigned local builds do not perform automatic checks.
 
 Production updates require a Tauri updater signature matching the public key
-embedded at release time. The private updater key remains in GitHub Actions and
-is separate from Apple code signing/notarization and Windows Authenticode. The
-release workflow requires both supported platform artifacts and detached
-signatures, uploads all assets first, publishes `latest.json` last, and only
-then publishes the complete GitHub Release. This prevents clients from seeing a
-manifest that references a partial release.
+versioned in the repository and embedded at release time. The private updater
+key and its password remain outside the repository and are separate from Apple
+code signing/notarization and Windows Authenticode. Losing the updater private
+key requires a planned trust-root migration; replacing it silently would strand
+installed clients.
+
+In `updater-only` mode, macOS uses an ad-hoc application signature and Windows
+has no Authenticode signature. This authenticates later update packages to an
+already installed client, but does not authenticate the publisher of the first
+installer to macOS or Windows. Initial installation therefore relies on the
+GitHub/TLS distribution path and may trigger Gatekeeper or SmartScreen warnings.
+`platform-signed` adds Developer ID/notarization and Authenticode without
+weakening the mandatory updater signature.
+
+The workflow creates or resumes a Draft Release, requires both supported
+platform artifacts and detached updater signatures, uploads the assets and
+`latest.json`, checks the exact Draft inventory, and only then publishes the
+complete stable Release. Failed builds remain Drafts, while already published
+tags are immutable. This prevents clients from seeing a manifest that references
+a partial release.
 
 The application checks the stable release channel only. Installation requires
 user confirmation and remains blocked while editable Rule state is unsaved.

@@ -550,7 +550,10 @@ fn merge_toml_mcp_entry(
         "command",
         id,
         &server.command,
-        entry.get("command").and_then(toml::Value::as_str).unwrap_or(""),
+        entry
+            .get("command")
+            .and_then(toml::Value::as_str)
+            .unwrap_or(""),
     )?;
     let effective_url = resolve_executable_field(
         "url",

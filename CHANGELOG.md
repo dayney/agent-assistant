@@ -15,6 +15,10 @@
 
 > 下一个版本待发布的变更将记录在此处。
 
+### 新增
+
+- **GitHub Release 下载与双平台自动更新发布链** — macOS ARM64 与 Windows x64 现在通过同一个 Draft Release 原子发布安装包、Tauri 更新签名、`latest.json` 与 SHA-256 清单；默认无需商业平台证书，并可显式切换到 Apple/Windows 完整签名模式。
+
 ### 修复
 
 - **本地 macOS 应用图标正确打包** — Tauri bundle 配置现在显式包含 macOS `.icns` 和跨平台 PNG/ICO 图标，避免本地 `.app` 显示默认占位图标。

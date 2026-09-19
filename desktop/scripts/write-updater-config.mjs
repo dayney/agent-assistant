@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { githubReleasesBase } from "./github-release-url.mjs";
+import { readUpdaterPublicKey } from "./updater-public-key.mjs";
 
 export function createUpdaterConfig({ version, publicKey, repository }) {
   const normalizedVersion = version.trim().replace(/^v/, "");
@@ -29,7 +30,9 @@ function main() {
   if (!outputPath) throw new Error("output path is required");
   const config = createUpdaterConfig({
     version: process.env.DESKTOP_VERSION ?? "",
-    publicKey: process.env.TAURI_UPDATER_PUBLIC_KEY ?? "",
+    publicKey: readUpdaterPublicKey(
+      process.env.TAURI_UPDATER_PUBLIC_KEY_PATH,
+    ),
     repository: process.env.GITHUB_REPOSITORY,
   });
   writeFileSync(outputPath, `${JSON.stringify(config, null, 2)}\n`);
