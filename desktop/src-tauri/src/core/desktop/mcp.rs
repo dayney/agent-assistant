@@ -218,6 +218,15 @@ impl Core {
             for (key, value) in &request.env {
                 server.env.insert(key.clone(), value.clone());
             }
+            // 🔴 后端安全门：凭据字段不允许保存明文值。
+            // 必须使用 ${secret:X} 或 ${env:X} 引用形式。前端应同步阻断，
+            // 但后端校验是最终防线，确保 canonical 文件永远不含敏感明文。
+            if mcp::credential_state(&server) == "plaintext-blocked" {
+                return Err(format!(
+                    "refusing to save MCP {id}: secret-like credential fields must use \
+                     ${{secret:…}} or ${{env:…}} references, not plaintext values"
+                ));
+            }
             source::write_mcp_server(&self.opts.home, &server)
                 .map_err(|error| format!("write global MCP {id}: {error}"))?;
             Ok(SaveMcpResult {
@@ -383,6 +392,34 @@ fn read_toml_config(path: &std::path::Path) -> Result<toml::Value, String> {
         .map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
+/// canonical 的 `command` / `url` 字段可能是 `safe_endpoint()` 生成的展示占位符。
+/// 此函数将其解析为可写入原生配置的真实值：
+/// - 若 canonical 值不是展示占位符 → 直接使用 canonical 值（空字符串也允许，用于删除字段）。
+/// - 若 canonical 值是展示占位符，且原生文件已有真实值 → 保留原生值，不覆盖。
+/// - 若 canonical 值是展示占位符，且原生文件也没有真实值 → 返回错误，拒绝写入。
+fn resolve_executable_field(
+    field: &str,
+    mcp_id: &str,
+    canonical_value: &str,
+    native_value: &str,
+) -> Result<String, String> {
+    if !mcp::is_display_placeholder(canonical_value) {
+        // canonical 是真实值（或空），直接使用
+        return Ok(canonical_value.to_string());
+    }
+    // canonical 是展示占位符
+    if !native_value.is_empty() && !mcp::is_display_placeholder(native_value) {
+        // 原生文件已有真实可执行值，保留它
+        return Ok(native_value.to_string());
+    }
+    // 原生也没有真实值，无法安全写入
+    Err(format!(
+        "cannot push MCP {mcp_id}: canonical `{field}` is a display placeholder \
+         (\"{canonical_value}\") and no executable value exists in the native config. \
+         Fix the canonical {field} before pushing."
+    ))
+}
+
 fn merge_json_mcp_entry(
     root: &mut Value,
     id: &str,
@@ -404,8 +441,22 @@ fn merge_json_mcp_entry(
         .as_object()
         .cloned()
         .ok_or_else(|| format!("mcpServers.{id} must be an object"))?;
-    set_json_string(&mut entry, "command", &server.command);
-    set_json_string(&mut entry, "url", &server.url);
+    // 🔴 展示占位符安全检查：若 canonical command/url 是 safe_endpoint() 生成的脱敏字符串，
+    // 不能将其写入原生运行配置。应保留原生已有的真实可执行值；若原生也没有真实值，则拒绝写入。
+    let effective_command = resolve_executable_field(
+        "command",
+        id,
+        &server.command,
+        entry.get("command").and_then(Value::as_str).unwrap_or(""),
+    )?;
+    let effective_url = resolve_executable_field(
+        "url",
+        id,
+        &server.url,
+        entry.get("url").and_then(Value::as_str).unwrap_or(""),
+    )?;
+    set_json_string(&mut entry, "command", &effective_command);
+    set_json_string(&mut entry, "url", &effective_url);
     set_json_array(&mut entry, "args", &server.args);
     set_json_map(&mut entry, "env", &server.env);
     set_json_map(&mut entry, "headers", &server.headers);
@@ -494,8 +545,21 @@ fn merge_toml_mcp_entry(
         .as_table()
         .cloned()
         .ok_or_else(|| format!("mcp_servers.{id} must be a table"))?;
-    set_toml_string(&mut entry, "command", &server.command);
-    set_toml_string(&mut entry, "url", &server.url);
+    // 🔴 展示占位符安全检查（与 JSON 分支逻辑相同）
+    let effective_command = resolve_executable_field(
+        "command",
+        id,
+        &server.command,
+        entry.get("command").and_then(toml::Value::as_str).unwrap_or(""),
+    )?;
+    let effective_url = resolve_executable_field(
+        "url",
+        id,
+        &server.url,
+        entry.get("url").and_then(toml::Value::as_str).unwrap_or(""),
+    )?;
+    set_toml_string(&mut entry, "command", &effective_command);
+    set_toml_string(&mut entry, "url", &effective_url);
     set_toml_array(&mut entry, "args", &server.args);
     set_toml_map(&mut entry, "env", &server.env);
     set_toml_map(&mut entry, "http_headers", &server.headers);
@@ -1085,5 +1149,141 @@ mod tests {
         };
 
         assert_eq!(super::runtime_check(&server), "eof-before-initialize");
+    }
+
+    // ── 以下三个测试覆盖 HANDOFF.md §3.3 中描述的根因问题 ──
+
+    /// save_global_mcp 收到明文凭据时必须返回错误，且 canonical 文件不能被写入。
+    #[test]
+    fn save_global_mcp_rejects_plaintext_secret() {
+        let dir = TestDir::new("mcp-save-plaintext-secret");
+        let opts = options(&dir);
+        fs::create_dir_all(opts.home.join("mcp")).unwrap();
+        // 先写一个合法的 canonical 文件（带引用形式的凭据）
+        fs::write(
+            opts.home.join("mcp/f2c-mcp.toml"),
+            "[server]\nname = \"f2c-mcp\"\nrecipe = \"f2c-mcp\"\n\n[server.env]\npersonalToken = \"${env:F2C_TOKEN}\"\n",
+        )
+        .unwrap();
+
+        let core = Core::new(opts.clone());
+        let err = core
+            .save_global_mcp(super::super::model::SaveMcpRequest {
+                mcp_id: "f2c-mcp".to_string(),
+                name: "f2c-mcp".to_string(),
+                description: String::new(),
+                recipe: "f2c-mcp".to_string(),
+                url: String::new(),
+                command: String::new(),
+                // 用户填入了明文 token（脱敏后的字面值模拟真实值）
+                env: std::collections::BTreeMap::from([(
+                    "personalToken".to_string(),
+                    "figd_plaintext_token".to_string(),
+                )]),
+            })
+            .unwrap_err();
+
+        // 必须返回包含 secret-like 或 plaintext 字样的错误
+        assert!(
+            err.to_lowercase().contains("secret")
+                || err.to_lowercase().contains("plaintext")
+                || err.to_lowercase().contains("reference"),
+            "expected plaintext-blocking error, got: {err}"
+        );
+        // canonical 文件内容不能被明文值覆盖
+        let canonical = fs::read_to_string(opts.home.join("mcp/f2c-mcp.toml")).unwrap();
+        assert!(
+            !canonical.contains("figd_plaintext_token"),
+            "canonical file must not contain plaintext token"
+        );
+        assert!(
+            canonical.contains("${env:F2C_TOKEN}"),
+            "canonical file must retain original reference"
+        );
+    }
+
+    /// canonical command 为展示占位符、原生文件已有真实可执行命令时，push 后必须保留原生命令。
+    #[test]
+    fn push_mcp_preserves_native_command_when_canonical_is_display_placeholder() {
+        let dir = TestDir::new("mcp-push-placeholder-command");
+        let opts = options(&dir);
+        fs::create_dir_all(opts.home.join("mcp")).unwrap();
+        // canonical 中 command 是脱敏占位符
+        fs::write(
+            opts.home.join("mcp/f2c-mcp.toml"),
+            "[server]\nname = \"f2c-mcp\"\nrecipe = \"f2c-mcp\"\ncommand = \"本地命令（已脱敏）\"\nargs = [\"/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js\", \"-y\", \"@f2c/mcp\"]\n\n[server.env]\npersonalToken = \"${env:F2C_TOKEN}\"\n",
+        )
+        .unwrap();
+        // 原生文件中有真实可执行命令
+        fs::create_dir_all(opts.native_root.join(".gemini/config")).unwrap();
+        fs::write(
+            opts.native_root.join(".gemini/config/mcp_config.json"),
+            r#"{"mcpServers":{"f2c-mcp":{"command":"/opt/homebrew/bin/node","args":["/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js","-y","@f2c/mcp"],"env":{"personalToken":"figd_real_token"}}}}"#,
+        )
+        .unwrap();
+
+        let core = Core::new(opts.clone());
+        core.push_mcp_to_agent(super::super::model::PushMcpToAgentRequest {
+            mcp_id: "f2c-mcp".to_string(),
+            agent: "antigravity-ide".to_string(),
+        })
+        .unwrap();
+
+        let written =
+            fs::read_to_string(opts.native_root.join(".gemini/config/mcp_config.json")).unwrap();
+        // 必须保留真实 Node 命令，不能写入占位符字符串
+        assert!(
+            written.contains("/opt/homebrew/bin/node"),
+            "native command must be preserved, got: {written}"
+        );
+        assert!(
+            !written.contains("本地命令（已脱敏）"),
+            "display placeholder must not appear in native config"
+        );
+        // 凭据保留逻辑：真实 token 应保持（secret ref 不覆盖真实值）
+        assert!(
+            written.contains("figd_real_token"),
+            "native credential must be preserved"
+        );
+    }
+
+    /// canonical command 为展示占位符、原生文件也没有真实命令时，push 应返回错误而非写入占位符。
+    #[test]
+    fn push_mcp_fails_when_placeholder_command_and_no_native_fallback() {
+        let dir = TestDir::new("mcp-push-placeholder-no-fallback");
+        let opts = options(&dir);
+        fs::create_dir_all(opts.home.join("mcp")).unwrap();
+        // canonical 中 command 是脱敏占位符
+        fs::write(
+            opts.home.join("mcp/f2c-mcp.toml"),
+            "[server]\nname = \"f2c-mcp\"\nrecipe = \"f2c-mcp\"\ncommand = \"本地命令（已脱敏）\"\nargs = [\"/opt/homebrew/lib/node_modules/npm/bin/npx-cli.js\", \"-y\", \"@f2c/mcp\"]\n\n[server.env]\npersonalToken = \"${env:F2C_TOKEN}\"\n",
+        )
+        .unwrap();
+        // 原生文件不存在（无真实命令）
+        fs::create_dir_all(opts.native_root.join(".gemini/config")).unwrap();
+
+        let core = Core::new(opts.clone());
+        let err = core
+            .push_mcp_to_agent(super::super::model::PushMcpToAgentRequest {
+                mcp_id: "f2c-mcp".to_string(),
+                agent: "antigravity-ide".to_string(),
+            })
+            .unwrap_err();
+
+        assert!(
+            err.to_lowercase().contains("display")
+                || err.to_lowercase().contains("placeholder")
+                || err.to_lowercase().contains("脱敏")
+                || err.to_lowercase().contains("executable"),
+            "expected display-placeholder error, got: {err}"
+        );
+        // 原生文件不应被创建/写入
+        assert!(
+            !opts
+                .native_root
+                .join(".gemini/config/mcp_config.json")
+                .exists(),
+            "native config must not be written when command is a placeholder"
+        );
     }
 }

@@ -127,6 +127,12 @@ pub(crate) fn is_secret_ref(value: &str) -> bool {
     value.starts_with("${secret:") || value.starts_with("${env:")
 }
 
+/// 判断 command/url 是否为 `safe_endpoint()` 生成的展示占位符字符串。
+/// 这类字符串只能用于 UI 展示，绝不能写入运行时配置或用于执行。
+pub(crate) fn is_display_placeholder(value: &str) -> bool {
+    value == "本地命令（已脱敏）" || value == "远程端点（已脱敏）"
+}
+
 pub(crate) fn sanitize_imported_credentials(server: &mut McpServer) {
     for (key, value) in server.env.iter_mut().chain(server.headers.iter_mut()) {
         if is_secret_key(key) && !value.is_empty() && !is_secret_ref(value) {
