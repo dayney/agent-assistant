@@ -6,6 +6,24 @@
 版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
 
 > **关于版本号的说明**
+> `v0.15.0` 及以后是 **Desktop 应用**阶段（Tauri + Rust Core + React）。
+> `v0.1.0` ~ `v0.14.0` 是**早期 CLI 工具**阶段（Go）。
+
+## [0.0.19] — 2026-09-19
+
+### 修复
+
+- **绑定自动更新到新仓库**
+- **提交 Desktop lockfile 修复远端依赖缓存**
+
+# Changelog
+
+本项目所有值得记录的变更都在这里。
+
+格式遵循 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)，
+版本号遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
+
+> **关于版本号的说明**
 > `v0.15.0` 及以后是 **Desktop 应用**阶段（Tauri + Rust Core + React），对应本仓库 `main` 分支的持续迭代。
 > `v0.1.0` ~ `v0.14.0` 是**早期 CLI 工具**阶段（Go），记录了 agentsync 从第一行代码成长为支持 30+ Agent 的全功能同步工具的历程。
 
