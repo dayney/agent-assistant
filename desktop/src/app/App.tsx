@@ -213,6 +213,7 @@ export function App() {
           <UpdateNotice
             state={updates.state}
             hasUnsavedChanges={ruleDirty}
+            autoOpen={updates.autoPrompt}
             onCheck={updates.checkNow}
             onInstall={updates.installAndRelaunch}
             onDismiss={updates.dismiss}

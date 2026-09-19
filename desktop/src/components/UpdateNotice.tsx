@@ -1,15 +1,17 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { UpdateState } from "../update/model";
 
 export function UpdateNotice({
   state,
   hasUnsavedChanges,
+  autoOpen,
   onCheck,
   onInstall,
   onDismiss,
 }: {
   state: UpdateState;
   hasUnsavedChanges: boolean;
+  autoOpen: boolean;
   onCheck: () => Promise<void>;
   onInstall: () => Promise<void>;
   onDismiss: () => void;
@@ -17,6 +19,13 @@ export function UpdateNotice({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const percentage = progressPercentage(state);
   const canDismiss = state.status !== "downloading" && state.status !== "ready";
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (autoOpen && state.status === "available" && dialog && !dialog.open) {
+      dialog.showModal();
+    }
+  }, [autoOpen, state.status]);
 
   return (
     <>
@@ -71,6 +80,10 @@ export function UpdateNotice({
           ref={dialogRef}
           className="update-dialog"
           aria-labelledby="update-dialog-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            onDismiss();
+          }}
         >
           <div className="dialog-heading">
             <div>
@@ -84,7 +97,7 @@ export function UpdateNotice({
               type="button"
               aria-label="关闭更新窗口"
               title="关闭"
-              onClick={() => dialogRef.current?.close()}
+              onClick={onDismiss}
             >
               ×
             </button>
@@ -104,7 +117,7 @@ export function UpdateNotice({
             <button
               className="button button-secondary"
               type="button"
-              onClick={() => dialogRef.current?.close()}
+              onClick={onDismiss}
             >
               稍后
             </button>
@@ -113,11 +126,11 @@ export function UpdateNotice({
               type="button"
               disabled={hasUnsavedChanges}
               onClick={() => {
-                dialogRef.current?.close();
+                onDismiss();
                 void onInstall();
               }}
             >
-              下载并重启安装
+              立即更新
             </button>
           </div>
         </dialog>

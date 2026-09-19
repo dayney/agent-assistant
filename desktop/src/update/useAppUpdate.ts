@@ -2,6 +2,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { runUpdateCheck, runUpdateInstall } from "./coordinator";
 import type { AppUpdateClient } from "./model";
+import { shouldAutoOpenUpdateDialog } from "./prompt";
 import {
   createInitialUpdateState,
   reduceUpdateState,
@@ -13,6 +14,7 @@ const CHECK_FOR_UPDATES_EVENT = "check-for-updates";
 export interface AppUpdateController {
   state: UpdateState;
   visible: boolean;
+  autoPrompt: boolean;
   checkNow(): Promise<void>;
   installAndRelaunch(): Promise<void>;
   dismiss(): void;
@@ -35,8 +37,10 @@ export function useAppUpdate({
     createInitialUpdateState,
   );
   const [visible, setVisible] = useState(false);
+  const [autoPrompt, setAutoPrompt] = useState(false);
   const startedRef = useRef(false);
   const checkingRef = useRef(false);
+  const dismissedThisSessionRef = useRef(false);
 
   const check = useCallback(
     async (manual: boolean): Promise<void> => {
@@ -45,7 +49,18 @@ export function useAppUpdate({
       if (manual) setVisible(true);
       const result = await runUpdateCheck(client, dispatch);
       checkingRef.current = false;
-      if (result.candidate) setVisible(true);
+      if (result.candidate) {
+        setVisible(true);
+        setAutoPrompt(
+          shouldAutoOpenUpdateDialog({
+            source: manual ? "manual" : "automatic",
+            hasCandidate: true,
+            dismissedThisSession: dismissedThisSessionRef.current,
+          }),
+        );
+      } else {
+        setAutoPrompt(false);
+      }
       if (manual && result.error) setVisible(true);
     },
     [client, enabled],
@@ -84,6 +99,8 @@ export function useAppUpdate({
   }, [client, hasUnsavedChanges, state.candidate]);
 
   const dismiss = useCallback(() => {
+    dismissedThisSessionRef.current = true;
+    setAutoPrompt(false);
     dispatch({ type: "dismissed" });
     setVisible(false);
   }, []);
@@ -91,6 +108,7 @@ export function useAppUpdate({
   return {
     state,
     visible,
+    autoPrompt,
     checkNow: () => check(true),
     installAndRelaunch,
     dismiss,
