@@ -18,12 +18,24 @@ test("creates a signed updater release override", () => {
         updater: {
           pubkey: "PUBLIC-KEY",
           endpoints: [
-            "https://github.com/spxrogers/agentsync/releases/latest/download/latest.json",
+            "https://github.com/dayney/agent-assistant/releases/latest/download/latest.json",
           ],
         },
       },
     },
   );
+});
+
+test("uses the workflow repository for the updater endpoint", () => {
+  const config = createUpdaterConfig({
+    version: "1.2.3",
+    publicKey: "PUBLIC-KEY",
+    repository: "example/agent-assistant-fork",
+  });
+
+  assert.deepEqual(config.plugins.updater.endpoints, [
+    "https://github.com/example/agent-assistant-fork/releases/latest/download/latest.json",
+  ]);
 });
 
 test("refuses to build an updater config without a public key", () => {
@@ -65,14 +77,46 @@ test("creates latest.json from both signed platform artifacts", () => {
     platforms: {
       "darwin-aarch64": {
         signature: "mac-signature",
-        url: "https://github.com/spxrogers/agentsync/releases/download/v1.2.3/agent-assistant.app.tar.gz",
+        url: "https://github.com/dayney/agent-assistant/releases/download/v1.2.3/agent-assistant.app.tar.gz",
       },
       "windows-x86_64": {
         signature: "windows-signature",
-        url: "https://github.com/spxrogers/agentsync/releases/download/v1.2.3/agent-assistant.nsis.zip",
+        url: "https://github.com/dayney/agent-assistant/releases/download/v1.2.3/agent-assistant.nsis.zip",
       },
     },
   });
+});
+
+test("uses the workflow repository for updater artifact URLs", () => {
+  const root = mkdtempSync(join(tmpdir(), "agentsync-updater-"));
+  writeFileSync(join(root, "agent-assistant.app.tar.gz"), "mac");
+  writeFileSync(
+    join(root, "agent-assistant.app.tar.gz.sig"),
+    "mac-signature",
+  );
+  writeFileSync(join(root, "agent-assistant.nsis.zip"), "windows");
+  writeFileSync(
+    join(root, "agent-assistant.nsis.zip.sig"),
+    "windows-signature",
+  );
+
+  const manifest = createUpdaterManifest({
+    artifactRoot: root,
+    version: "1.2.3",
+    tag: "v1.2.3",
+    notes: "",
+    pubDate: "2026-09-16T00:00:00.000Z",
+    repository: "example/agent-assistant-fork",
+  });
+
+  assert.equal(
+    manifest.platforms["darwin-aarch64"].url,
+    "https://github.com/example/agent-assistant-fork/releases/download/v1.2.3/agent-assistant.app.tar.gz",
+  );
+  assert.equal(
+    manifest.platforms["windows-x86_64"].url,
+    "https://github.com/example/agent-assistant-fork/releases/download/v1.2.3/agent-assistant.nsis.zip",
+  );
 });
 
 test("refuses an incomplete updater manifest", () => {

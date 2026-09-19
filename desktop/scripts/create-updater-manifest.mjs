@@ -8,7 +8,7 @@ import {
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const releaseBase = "https://github.com/spxrogers/agentsync/releases/download";
+import { githubReleasesBase } from "./github-release-url.mjs";
 
 export function createUpdaterManifest({
   artifactRoot,
@@ -16,7 +16,9 @@ export function createUpdaterManifest({
   tag,
   notes,
   pubDate,
+  repository,
 }) {
+  const releaseBase = `${githubReleasesBase(repository)}/download`;
   const platforms = {};
   for (const signaturePath of walkFiles(artifactRoot).filter((path) =>
     path.endsWith(".sig"),
@@ -77,6 +79,7 @@ function main() {
     tag: process.env.RELEASE_TAG ?? "",
     notes,
     pubDate: process.env.RELEASE_PUB_DATE ?? new Date().toISOString(),
+    repository: process.env.GITHUB_REPOSITORY,
   });
   writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }

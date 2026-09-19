@@ -136,7 +136,9 @@ workbench contains unsaved edits, installation remains disabled until those
 edits are saved or discarded.
 
 The release channel is the stable GitHub `latest` release. Pre-release tags are
-rejected by the Desktop release preflight.
+rejected by the Desktop release preflight. Release builds derive both the
+updater endpoint and every manifest asset URL from `GITHUB_REPOSITORY`; local
+release-tool execution defaults to `dayney/agent-assistant`.
 
 ## Release trust and credentials
 

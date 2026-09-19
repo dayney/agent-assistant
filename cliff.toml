@@ -35,7 +35,7 @@ trim = true
 
 footer = """
 ---
-*通过 [GitHub Releases](https://github.com/spxrogers/agentsync/releases) 查看完整发布历史。*
+*通过 [GitHub Releases](https://github.com/dayney/agent-assistant/releases) 查看完整发布历史。*
 """
 
 [git]

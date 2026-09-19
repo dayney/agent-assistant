@@ -82,6 +82,11 @@ assets, and publishes `latest.json` last. It then publishes the completed draft
 GitHub Release. Apple notarization, Windows Authenticode, and the Tauri updater
 signature are separate trust checks.
 
+Updater endpoints and artifact URLs are derived from the workflow's
+`GITHUB_REPOSITORY` value. Local release-tool execution defaults to
+`dayney/agent-assistant`, so production builds always check this repository's
+stable `latest` release instead of the repository the project was migrated from.
+
 Desktop publishing is enabled only when the repository variable
 `DESKTOP_RELEASE_ENABLED` is `true` and every signing secret listed in
 [`desktop/README.md`](desktop/README.md) is provisioned. Releases accept stable
